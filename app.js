@@ -522,6 +522,21 @@ function buildReport(rd) {
   $("rep-legend").innerHTML = labels.length ? labels.map((l,i) => `
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("")
     : `<p class="center-note">אין הוצאות בטווח זה</p>`;
+
+  const expenseTxs = txs.filter(t => t.type === "expense").sort((a,b) => b.date.localeCompare(a.date));
+  $("rep-expense-list").innerHTML = expenseTxs.length ? expenseTxs.map(t => `
+    <div class="card" style="padding:10px 14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div>
+          <p style="font-size:13px;font-weight:600;margin:0;">${t.category}</p>
+          <p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0;">${[t.supplier, t.desc].filter(Boolean).join(" · ") || "—"}</p>
+        </div>
+        <div style="text-align:left;">
+          <p style="font-size:14px;font-weight:700;margin:0;">${fmtILS(t.amount)}</p>
+          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">${t.date.split("-").reverse().join(".")} · ${t.method||""}</p>
+        </div>
+      </div>
+    </div>`).join("") : `<p class="center-note">אין הוצאות בטווח זה</p>`;
 }
 $("btn-export-report").addEventListener("click", () => {
   const rows = [["סוג","קטגוריה/דירה","סכום","תאריך","אופן תשלום"]];
