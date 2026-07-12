@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>ניהול ועד</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="topbar">
+    <div class="title-block">
+      <h1 id="hdr-title">ניהול ועד</h1>
+      <p class="sub" id="hdr-sub">טוען...</p>
+    </div>
+    <button class="icon-btn" id="btn-logout" title="התנתק"><i class="ti ti-logout"></i></button>
+  </header>
+
+  <main>
+
+    <!-- ========== מסך כניסה ========== -->
+    <section id="view-entry">
+      <div class="card">
+        <p style="font-weight:700;font-size:15px;margin:0 0 14px;">כניסה למערכת</p>
+        <div class="btn-row">
+          <button class="btn primary" id="tab-admin-login">כניסת ועד</button>
+          <button class="btn" id="tab-resident-login">כניסת דייר</button>
+        </div>
+
+        <div id="admin-login-form">
+          <label>אימייל</label>
+          <input type="email" id="admin-email" placeholder="name@example.com">
+          <label>סיסמה</label>
+          <input type="password" id="admin-pass" placeholder="••••••••">
+          <button class="btn primary" id="btn-admin-login">התחבר</button>
+        </div>
+
+        <div id="resident-login-form" class="hidden">
+          <label>מספר דירה</label>
+          <select id="resident-unit"></select>
+          <label>קוד אישי (PIN)</label>
+          <input type="text" inputmode="numeric" id="resident-pin" placeholder="4 ספרות">
+          <button class="btn primary" id="btn-resident-login">כניסה</button>
+        </div>
+      </div>
+
+      <button class="btn ghost" id="btn-show-public">צפייה בסיכום כללי (ללא התחברות) ↗</button>
+    </section>
+
+    <!-- ========== מסך ציבורי ========== -->
+    <section id="view-public" class="hidden">
+      <div class="receipt" id="public-summary-box">
+        <div class="rhead">
+          <p class="bname" id="pub-bname">ועד בית</p>
+          <p class="baddr" id="pub-baddr"></p>
+        </div>
+        <div class="metric-grid">
+          <div class="metric"><p class="label">יתרת קופה</p><p class="value" id="pub-balance">-</p></div>
+          <div class="metric"><p class="label">שנה נוכחית</p><p class="value" id="pub-year">-</p></div>
+        </div>
+        <div style="margin-bottom:14px;">
+          <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">הכנסות מול הוצאות</p>
+          <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--surface-2);">
+            <div id="pub-bar-income" style="background:var(--green);"></div>
+            <div id="pub-bar-expense" style="background:var(--red);"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:6px;">
+            <span id="pub-income-txt"></span>
+            <span id="pub-expense-txt"></span>
+          </div>
+        </div>
+      </div>
+      <button class="btn ghost" id="btn-back-entry">חזרה למסך כניסה</button>
+    </section>
+
+    <!-- ========== דשבורד ועד ========== -->
+    <section id="view-dashboard" class="hidden">
+      <div class="metric-grid cols-3">
+        <div class="metric"><p class="label">יתרת קופה</p><p class="value" id="d-balance">-</p></div>
+        <div class="metric"><p class="label">הכנסות</p><p class="value pos" id="d-income">-</p></div>
+        <div class="metric"><p class="label">הוצאות</p><p class="value neg" id="d-expense">-</p></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn success" id="btn-goto-add-income"><i class="ti ti-plus"></i> הכנסה חדשה</button>
+        <button class="btn danger" id="btn-goto-add-expense"><i class="ti ti-minus"></i> הוצאה חדשה</button>
+      </div>
+      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">סטטוס דירות</p>
+      <div class="unit-grid" id="dashboard-units"></div>
+    </section>
+
+    <!-- ========== כל הדירות ========== -->
+    <section id="view-units" class="hidden">
+      <div class="unit-grid" id="units-grid-full"></div>
+    </section>
+
+    <!-- ========== היסטוריית דירה ========== -->
+    <section id="view-unit-detail" class="hidden">
+      <div class="card">
+        <p style="font-weight:700;font-size:15px;margin:0 0 4px;" id="ud-title">דירה</p>
+        <p style="font-size:12px;color:var(--text-secondary);margin:0 0 14px;" id="ud-sub"></p>
+        <div id="ud-tenant-history"></div>
+      </div>
+      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">תנועות</p>
+      <div id="ud-transactions"></div>
+    </section>
+
+    <!-- ========== הוספת הכנסה ========== -->
+    <section id="view-add-income" class="hidden">
+      <div class="card">
+        <label>דירה</label>
+        <select id="inc-unit"></select>
+        <label>סוג הכנסה</label>
+        <select id="inc-type">
+          <option value="monthly">דמי ועד חודשיים</option>
+          <option value="culture">תרבות הדיור (שנתי)</option>
+          <option value="other">אחר</option>
+        </select>
+        <div id="inc-months-block">
+          <label>עבור אילו חודשים? (אפשר לבחור כמה)</label>
+          <div class="chip-grid" id="inc-months-grid"></div>
+        </div>
+        <label>סכום כולל</label>
+        <input type="number" id="inc-amount">
+        <p style="font-size:11px;color:var(--text-muted);margin:-10px 0 14px;" id="inc-amount-hint"></p>
+        <label>אופן תשלום</label>
+        <select id="inc-method">
+          <option>מזומן</option><option>העברה בנקאית</option><option>צ'ק</option><option>הוראת קבע</option>
+        </select>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
+          <span style="font-size:13px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך רישום</span>
+          <span style="font-size:13px;font-weight:600;" id="inc-date-display"></span>
+        </div>
+        <label>הערה (לא חובה)</label>
+        <input type="text" id="inc-note">
+        <button class="btn success" id="btn-save-income">שמור הכנסה</button>
+      </div>
+    </section>
+
+    <!-- ========== הוספת הוצאה ========== -->
+    <section id="view-add-expense" class="hidden">
+      <div class="card">
+        <label>קטגוריה</label>
+        <select id="exp-category">
+          <option>דמי ניקיון</option><option>חומרי ניקוי</option><option>גינון</option>
+          <option>חשמל</option><option>אחזקה</option><option>עמלות בנק</option>
+          <option>הדברה</option><option>אחר</option>
+        </select>
+        <label>סכום</label>
+        <input type="number" id="exp-amount">
+        <label>אופן תשלום</label>
+        <select id="exp-method">
+          <option>מזומן</option><option>העברה בנקאית</option><option>צ'ק</option><option>הוראת קבע</option>
+        </select>
+        <label>ספק / למי שולם</label>
+        <input type="text" id="exp-supplier">
+        <label>תיאור (לא חובה)</label>
+        <input type="text" id="exp-desc">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
+          <span style="font-size:13px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך</span>
+          <span style="font-size:13px;font-weight:600;" id="exp-date-display"></span>
+        </div>
+        <button class="btn danger" id="btn-save-expense">שמור הוצאה</button>
+      </div>
+    </section>
+
+    <!-- ========== קבלה ========== -->
+    <section id="view-receipt" class="hidden">
+      <div class="receipt" id="receipt-box">
+        <div class="rhead">
+          <p class="bname" id="rc-bname">ועד בית</p>
+          <p class="baddr" id="rc-baddr"></p>
+        </div>
+        <table>
+          <tr><td>מס' קבלה</td><td id="rc-num"></td></tr>
+          <tr><td>תאריך</td><td id="rc-date"></td></tr>
+          <tr><td>דירה</td><td id="rc-unit"></td></tr>
+          <tr><td>שם הדייר</td><td id="rc-name"></td></tr>
+          <tr><td>אופן תשלום</td><td id="rc-method"></td></tr>
+        </table>
+        <div id="rc-lines"></div>
+        <div class="total-row"><span>סה"כ שולם</span><span class="amt" id="rc-total"></span></div>
+        <div id="rc-sig-block">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-size:12px;color:var(--text-secondary);">חתימת הוועד</span>
+            <button class="btn ghost" style="width:auto;padding:3px 8px;font-size:11px;" id="btn-edit-sig">ערוך חתימה</button>
+          </div>
+          <div class="sig-box" id="rc-sig-display"></div>
+        </div>
+        <button class="btn whatsapp" id="btn-share-whatsapp"><i class="ti ti-brand-whatsapp"></i> שתף קבלה חתומה בוואטסאפ</button>
+        <div class="badge success hidden" id="rc-sent-badge" style="width:100%;text-align:center;padding:10px;margin-top:10px;">
+          <i class="ti ti-check"></i> נשלחה בוואטסאפ
+        </div>
+      </div>
+      <button class="btn ghost" id="btn-receipt-done">סיום</button>
+    </section>
+
+    <!-- ========== דוחות ========== -->
+    <section id="view-reports" class="hidden">
+      <div class="btn-row" style="flex-wrap:wrap;gap:6px;">
+        <button class="btn" data-range="month" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">חודשי</button>
+        <button class="btn" data-range="quarter" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">רבעוני</button>
+        <button class="btn" data-range="year" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">שנתי</button>
+        <button class="btn" data-range="custom" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">טווח מותאם</button>
+      </div>
+      <div id="reports-range-picker" style="margin-bottom:14px;"></div>
+      <div class="metric-grid cols-3">
+        <div class="metric"><p class="label">הכנסות</p><p class="value pos" id="rep-income">-</p></div>
+        <div class="metric"><p class="label">הוצאות</p><p class="value neg" id="rep-expense">-</p></div>
+        <div class="metric"><p class="label">מאזן</p><p class="value" id="rep-balance">-</p></div>
+      </div>
+      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">פילוח הוצאות לפי קטגוריה</p>
+      <div style="position:relative;width:100%;height:220px;margin-bottom:12px;">
+        <canvas id="rep-chart" role="img" aria-label="פילוח הוצאות לפי קטגוריה"></canvas>
+      </div>
+      <div id="rep-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;font-size:12px;color:var(--text-secondary);"></div>
+      <button class="btn" id="btn-export-report"><i class="ti ti-download"></i> ייצוא דוח (CSV)</button>
+    </section>
+
+    <!-- ========== פרויקטים / הצעות מחיר ========== -->
+    <section id="view-projects" class="hidden">
+      <div id="projects-list"></div>
+      <button class="btn" id="btn-new-project"><i class="ti ti-plus"></i> פרויקט / הצעת מחיר חדשה</button>
+    </section>
+
+    <!-- ========== הגדרות ========== -->
+    <section id="view-settings" class="hidden">
+      <div class="card">
+        <label>שם הוועד</label>
+        <input type="text" id="set-name" placeholder="ועד בית">
+        <label>כתובת הבניין</label>
+        <input type="text" id="set-address" placeholder="לדוגמה: רחוב הרצל 10, נתניה">
+        <label>דמי ועד חודשיים (ברירת מחדל)</label>
+        <input type="number" id="set-fee" value="80">
+        <label>חתימת הוועד</label>
+        <div class="sig-box"><canvas id="sig-pad" width="400" height="120"></canvas></div>
+        <div class="btn-row">
+          <button class="btn ghost" id="btn-clear-sig">נקה</button>
+          <button class="btn primary" id="btn-save-sig">שמור חתימה</button>
+        </div>
+        <button class="btn success" id="btn-save-settings">שמור הגדרות</button>
+      </div>
+      <p style="font-weight:700;font-size:14px;margin:16px 0 10px;">ניהול דירות ודיירים</p>
+      <div id="settings-units-list"></div>
+    </section>
+
+    <!-- ========== מסך אישי לדייר ========== -->
+    <section id="view-resident" class="hidden">
+      <div class="metric-grid">
+        <div class="metric"><p class="label">דירה שלי</p><p class="value" id="res-unit-num">-</p></div>
+        <div class="metric"><p class="label">יתרה/חוב</p><p class="value" id="res-balance">-</p></div>
+      </div>
+      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">היסטוריית תשלומים</p>
+      <div id="res-transactions"></div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar hidden" id="admin-tabbar">
+    <button data-view="view-dashboard" class="active"><i class="ti ti-home"></i>בית</button>
+    <button data-view="view-units"><i class="ti ti-building"></i>דירות</button>
+    <button data-view="view-reports"><i class="ti ti-chart-bar"></i>דוחות</button>
+    <button data-view="view-projects"><i class="ti ti-clipboard-list"></i>פרויקטים</button>
+    <button data-view="view-settings"><i class="ti ti-settings"></i>הגדרות</button>
+  </nav>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
