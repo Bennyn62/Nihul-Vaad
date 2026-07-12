@@ -5,8 +5,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
-  updateDoc, query, where, orderBy
+  updateDoc, query, where, orderBy, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { historicalData } from "./historicalData.js";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
@@ -414,6 +415,7 @@ function renderSettings() {
   $("set-name").value = STATE.settings.name || "";
   $("set-address").value = STATE.settings.address || "";
   $("set-fee").value = STATE.settings.fee || 80;
+  renderImportCard();
   const canvas = $("sig-pad");
   sigCtx = canvas.getContext("2d");
   sigCtx.clearRect(0,0,canvas.width,canvas.height);
@@ -463,6 +465,72 @@ async function editUnit(unitId) {
   await updateUnit(unitId, { currentName: newName, currentPhone: newPhone, pin: newPin, history, moveInDate: newName !== unit.currentName ? todayISO() : (unit.moveInDate||"") });
   renderSettings();
 }
+
+// ---------- Historical data import ----------
+function renderImportCard() {
+  const incCount = historicalData.income.length;
+  const expCount = historicalData.expense.length;
+  const incSum = historicalData.income.reduce((s,x)=>s+x.amount,0);
+  const expSum = historicalData.expense.reduce((s,x)=>s+x.amount,0);
+  $("import-summary").textContent =
+    `${incCount} רשומות הכנסה (סה"כ ${fmtILS(incSum)}) + ${expCount} רשומות הוצאה (סה"כ ${fmtILS(expSum)}), שנים 2023–2026.`;
+  $("import-done-note").classList.toggle("hidden", !STATE.settings.historicalImported);
+  $("btn-import-history").textContent = STATE.settings.historicalImported
+    ? "ייבא שוב (עלול ליצור כפילויות!)" : "ייבא נתונים היסטוריים (2023–2026)";
+}
+$("btn-import-history").addEventListener("click", async () => {
+  const ok = confirm(
+    `הפעולה תוסיף ${historicalData.income.length} תנועות הכנסה ו-${historicalData.expense.length} תנועות הוצאה, ` +
+    `ותעדכן היסטוריית דיירים ל-12 הדירות. זו פעולה חד-פעמית מומלצת. להמשיך?`
+  );
+  if (!ok) return;
+  $("btn-import-history").disabled = true;
+  $("btn-import-history").textContent = "מייבא... נא לא לסגור את הדף";
+  try {
+    // batched writes, max ~450 ops per batch
+    const allTx = [
+      ...historicalData.income.map(x => ({
+        type: "income", unitId: String(x.unit), category: x.category, amount: x.amount,
+        months: x.month !== null && x.month !== undefined ? [x.month] : [],
+        method: x.method, date: x.date, note: x.note, year: x.year, createdAt: Date.now()
+      })),
+      ...historicalData.expense.map(x => ({
+        type: "expense", category: x.category, amount: x.amount, method: x.method,
+        supplier: x.desc || "", desc: x.note, date: x.date, year: x.year, createdAt: Date.now()
+      }))
+    ];
+    for (let i = 0; i < allTx.length; i += 400) {
+      const batch = writeBatch(db);
+      const chunk = allTx.slice(i, i + 400);
+      chunk.forEach(tx => {
+        const ref = doc(collection(db, "transactions"));
+        batch.set(ref, tx);
+      });
+      await batch.commit();
+    }
+    // update unit history
+    for (const [unitNum, info] of Object.entries(historicalData.unitsHistory)) {
+      const unitId = String(unitNum);
+      const existing = STATE.units.find(u => u.id === unitId);
+      if (!existing) continue;
+      const mergedHistory = [
+        ...(existing.history || []),
+        ...info.history.map(h => ({ name: h.name, startDate: "", endDate: h.note }))
+      ];
+      await updateUnit(unitId, { history: mergedHistory });
+    }
+    // add renovation quotes project
+    await addDoc(collection(db, "projects"), historicalData.quotesProject);
+    await saveSettings({ historicalImported: true });
+    if (STATE.currentYear) await loadTransactions(STATE.currentYear);
+    alert("הייבוא הושלם בהצלחה!");
+  } catch (e) {
+    alert("שגיאה בייבוא: " + e.message);
+  } finally {
+    $("btn-import-history").disabled = false;
+    renderImportCard();
+  }
+});
 
 // ---------- Public view ----------
 async function renderPublicView() {
