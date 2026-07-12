@@ -25,6 +25,8 @@ let STATE = {
   units: [],              // [{id, number, currentName, currentPhone, history:[]}]
   transactions: [],        // cached for current year
   currentYear: new Date().getFullYear(),
+  allTimeBalance: 0,
+  unitDebts: {},
   pendingReceipt: null
 };
 
@@ -42,10 +44,11 @@ async function saveSettings(patch) {
 async function loadUnits() {
   const snap = await getDocs(collection(db, "units"));
   if (snap.empty) {
-    // seed empty units 1..TOTAL_UNITS on first run
+    // seed empty units 1..TOTAL_UNITS on first run (original units, active since 2023)
     for (let i = 1; i <= TOTAL_UNITS; i++) {
       await setDoc(doc(db, "units", String(i)), {
-        number: i, currentName: "", currentPhone: "", pin: "", history: []
+        number: i, currentName: "", currentPhone: "", pin: "", history: [],
+        createdYear: 2023, manualDebtAdjustment: 0
       });
     }
     return loadUnits();
@@ -53,14 +56,54 @@ async function loadUnits() {
   STATE.units = snap.docs.map(d => ({ id: d.id, ...d.data() }))
     .sort((a,b) => a.number - b.number);
 }
+async function addUnit() {
+  const nextNum = STATE.units.length ? Math.max(...STATE.units.map(u => u.number)) + 1 : 1;
+  const unitId = String(nextNum);
+  const createdYear = new Date().getFullYear();
+  await setDoc(doc(db, "units", unitId), {
+    number: nextNum, currentName: "", currentPhone: "", pin: "", history: [],
+    createdYear, manualDebtAdjustment: 0
+  });
+  STATE.units.push({ id: unitId, number: nextNum, currentName: "", currentPhone: "", pin: "", history: [], createdYear, manualDebtAdjustment: 0 });
+}
+function getUnitCumulative(unitId) {
+  return STATE.unitDebts[unitId] || { paid: 0, expected: 0, adjustment: 0, debt: 0 };
+}
 async function loadTransactions(year) {
   const q = query(collection(db, "transactions"), where("year", "==", year));
   const snap = await getDocs(q);
   STATE.transactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
+async function computeAllTimeBalance() {
+  const snap = await getDocs(collection(db, "transactions"));
+  let income = 0, expense = 0;
+  const paidByUnit = {};
+  snap.docs.forEach(d => {
+    const t = d.data();
+    if (t.type === "income") {
+      income += (t.amount||0);
+      if (t.unitId) paidByUnit[t.unitId] = (paidByUnit[t.unitId]||0) + (t.amount||0);
+    } else {
+      expense += (t.amount||0);
+    }
+  });
+  STATE.allTimeBalance = income - expense;
+  const nowYear = new Date().getFullYear();
+  STATE.unitDebts = {};
+  STATE.units.forEach(u => {
+    const startYear = u.createdYear || 2023;
+    const yearsActive = Math.max(1, nowYear - startYear + 1);
+    const expected = STATE.settings.fee * 12 * yearsActive;
+    const paid = paidByUnit[u.id] || 0;
+    const adjustment = u.manualDebtAdjustment || 0;
+    STATE.unitDebts[u.id] = { paid, expected, adjustment, debt: expected - paid + adjustment };
+  });
+  return STATE.allTimeBalance;
+}
 async function saveTransaction(tx) {
   const ref = await addDoc(collection(db, "transactions"), tx);
   STATE.transactions.push({ id: ref.id, ...tx });
+  STATE.allTimeBalance += (tx.type === "income" ? tx.amount : -tx.amount);
   return ref.id;
 }
 async function updateUnit(unitId, patch) {
@@ -81,7 +124,12 @@ function showView(id) {
   if (id === "view-units") renderUnitsGrid("units-grid-full");
   if (id === "view-add-income") renderAddIncome();
   if (id === "view-add-expense") renderAddExpense();
-  if (id === "view-reports") renderReports("month");
+  if (id === "view-reports") {
+    document.querySelectorAll("[data-range]").forEach(x => x.classList.remove("tab-active"));
+    document.querySelector('[data-range="month"]').classList.add("tab-active");
+    currentReportRange = "month";
+    renderReports("month");
+  }
   if (id === "view-projects") renderProjects();
   if (id === "view-settings") renderSettings();
   if (id === "view-resident") renderResidentView();
@@ -95,10 +143,14 @@ document.querySelectorAll("#admin-tabbar button").forEach(btn => {
 $("tab-admin-login").addEventListener("click", () => {
   $("admin-login-form").classList.remove("hidden");
   $("resident-login-form").classList.add("hidden");
+  $("tab-admin-login").classList.remove("tab-inactive"); $("tab-admin-login").classList.add("tab-active");
+  $("tab-resident-login").classList.remove("tab-active"); $("tab-resident-login").classList.add("tab-inactive");
 });
 $("tab-resident-login").addEventListener("click", () => {
   $("resident-login-form").classList.remove("hidden");
   $("admin-login-form").classList.add("hidden");
+  $("tab-resident-login").classList.remove("tab-inactive"); $("tab-resident-login").classList.add("tab-active");
+  $("tab-admin-login").classList.remove("tab-active"); $("tab-admin-login").classList.add("tab-inactive");
   $("resident-unit").innerHTML = STATE.units.map(u =>
     `<option value="${u.id}">דירה ${u.number}${u.currentName ? " · " + u.currentName : ""}</option>`
   ).join("");
@@ -156,6 +208,8 @@ async function enterApp() {
   $("view-entry").classList.add("hidden");
   $("view-public").classList.add("hidden");
   if (STATE.role === "admin") {
+    await computeAllTimeBalance();
+    populateYearSelector();
     $("admin-tabbar").classList.remove("hidden");
     showView("view-dashboard");
   } else {
@@ -163,24 +217,34 @@ async function enterApp() {
     showView("view-resident");
   }
 }
+function populateYearSelector() {
+  const realYear = new Date().getFullYear();
+  const earliestYear = 2023;
+  const years = [];
+  for (let y = realYear + 1; y >= earliestYear; y--) years.push(y);
+  $("dash-year-select").innerHTML = years.map(y =>
+    `<option value="${y}" ${y===STATE.currentYear?"selected":""}>${y === realYear ? "שנה נוכחית · " : ""}${y}</option>`).join("");
+  $("dash-year-select").onchange = async () => {
+    STATE.currentYear = parseInt($("dash-year-select").value);
+    await loadTransactions(STATE.currentYear);
+    renderDashboard();
+  };
+}
 
 // ---------- Derived data ----------
 function unitStatus(unit) {
-  const paid = STATE.transactions
-    .filter(t => t.type === "income" && t.unitId === unit.id)
-    .reduce((s,t) => s + (t.amount||0), 0);
-  const expected = STATE.settings.fee * 12;
+  const cum = getUnitCumulative(unit.id);
   const isVacant = !unit.currentName;
-  const turnover = (unit.history||[]).some(h => h.endDate && h.endDate.startsWith(String(STATE.currentYear)));
+  const turnover = (unit.history||[]).some(h => h.endDate && h.endDate.includes(String(STATE.currentYear)));
   let status = "paid";
   if (isVacant) status = "vacant";
-  else if (paid < expected) status = "late";
-  return { paid, expected, isVacant, turnover, status };
+  else if (cum.debt > 0) status = "late";
+  return { ...cum, isVacant, turnover, status };
 }
 
 function unitCardHtml(unit, forDashboard) {
   const st = unitStatus(unit);
-  const label = st.isVacant ? "ריקה" : (st.status === "paid" ? "שולם במלואו" : `שולם ${fmtILS(st.paid)} מ-${fmtILS(st.expected)}`);
+  const label = st.isVacant ? "ריקה" : (st.status === "paid" ? "אין חוב" : `חוב מצטבר: ${fmtILS(st.debt)}`);
   return `
   <div class="unit-card ${st.turnover ? "turnover" : ""}" data-unit="${unit.id}">
     <div class="row-top">
@@ -205,11 +269,11 @@ function renderDashboard() {
   const expense = STATE.transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+(t.amount||0),0);
   $("d-income").textContent = fmtILS(income);
   $("d-expense").textContent = fmtILS(expense);
-  $("d-balance").textContent = fmtILS(income - expense);
+  $("d-balance").textContent = fmtILS(STATE.allTimeBalance);
   renderUnitsGrid("dashboard-units");
 }
 
-function openUnitDetail(unitId) {
+async function openUnitDetail(unitId) {
   const unit = STATE.units.find(u => u.id === unitId);
   $("ud-title").textContent = `דירה ${unit.number}`;
   $("ud-sub").textContent = unit.currentName ? `דייר נוכחי: ${unit.currentName}` : "דירה ריקה";
@@ -218,6 +282,10 @@ function openUnitDetail(unitId) {
     <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-top:1px solid var(--border);">
       <span>${h.name}</span><span style="color:var(--text-secondary);">${h.startDate||""} — ${h.endDate||"היום"}</span>
     </div>`).join("") : `<p style="font-size:12px;color:var(--text-muted);">אין היסטוריית דיירים קודמים</p>`;
+
+  showViewRaw("view-unit-detail");
+  renderUnitCumulativeCard(unitId);
+
   const txs = STATE.transactions.filter(t => t.unitId === unitId).sort((a,b)=>b.date.localeCompare(a.date));
   $("ud-transactions").innerHTML = txs.length ? txs.map(t => `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
@@ -226,8 +294,34 @@ function openUnitDetail(unitId) {
         <span style="font-size:13px;font-weight:700;">${fmtILS(t.amount)}</span>
       </div>
       <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">${t.date}</p>
-    </div>`).join("") : `<p class="center-note">אין תנועות עדיין השנה</p>`;
-  showViewRaw("view-unit-detail");
+    </div>`).join("") : `<p class="center-note">אין תנועות עדיין בשנה הנוכחית שנבחרה</p>`;
+}
+function renderUnitCumulativeCard(unitId) {
+  const unit = STATE.units.find(u => u.id === unitId);
+  const cum = getUnitCumulative(unitId);
+  $("ud-cumulative").innerHTML = `
+    <div class="card">
+      <p style="font-weight:700;font-size:13px;margin:0 0 8px;">יתרת חוב מצטברת (הערכה, כל השנים)</p>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <tr><td style="color:var(--text-secondary);padding:3px 0;">סה"כ שולם אי-פעם</td><td style="text-align:left;">${fmtILS(cum.paid)}</td></tr>
+        <tr><td style="color:var(--text-secondary);padding:3px 0;">צפי (${STATE.settings.fee}₪ × 12 חודשים × שנות פעילות)</td><td style="text-align:left;">${fmtILS(cum.expected)}</td></tr>
+        <tr><td style="color:var(--text-secondary);padding:3px 0;">התאמה ידנית</td><td style="text-align:left;">${fmtILS(cum.adjustment)}</td></tr>
+        <tr style="border-top:1px solid var(--border-strong);"><td style="padding:6px 0 0;font-weight:700;">יתרת חוב</td><td style="text-align:left;padding:6px 0 0;font-weight:700;color:${cum.debt>0?"var(--red)":"var(--green)"};">${fmtILS(cum.debt)}</td></tr>
+      </table>
+      <p style="font-size:11px;color:var(--text-muted);margin:8px 0 10px;">זו הערכה שמניחה 12 חודשי תשלום בכל שנה מאז שהדירה נוצרה במערכת (${unit.createdYear||2023}). אם הדירה הייתה ריקה חלק מהזמן, השתמש ב"התאמה ידנית" (מספר שלילי מקטין את החוב) כדי לתקן.</p>
+      <button class="btn ghost" id="btn-edit-debt-adj">ערוך התאמה ידנית</button>
+    </div>`;
+  $("btn-edit-debt-adj").addEventListener("click", async () => {
+    const val = prompt("התאמה ידנית ליתרת החוב (מספר שלילי = מקטין חוב, למשל בגלל תקופת ריקנות):", String(unit.manualDebtAdjustment||0));
+    if (val === null) return;
+    const num = parseFloat(val);
+    if (isNaN(num)) { alert("יש להזין מספר"); return; }
+    await updateUnit(unitId, { manualDebtAdjustment: num });
+    STATE.unitDebts[unitId].adjustment = num;
+    STATE.unitDebts[unitId].debt = STATE.unitDebts[unitId].expected - STATE.unitDebts[unitId].paid + num;
+    renderUnitCumulativeCard(unitId);
+    renderUnitsGrid("dashboard-units");
+  });
 }
 function showViewRaw(id) {
   document.querySelectorAll("main > section").forEach(s => s.classList.add("hidden"));
@@ -279,6 +373,10 @@ $("btn-save-income").addEventListener("click", async () => {
     year: STATE.currentYear, createdAt: Date.now()
   };
   const id = await saveTransaction(tx);
+  if (STATE.unitDebts[unitId]) {
+    STATE.unitDebts[unitId].paid += amount;
+    STATE.unitDebts[unitId].debt -= amount;
+  }
   openReceipt({ ...tx, id });
 });
 
@@ -341,16 +439,69 @@ $("btn-share-whatsapp").addEventListener("click", async () => {
 
 // ---------- Reports ----------
 let repChart = null;
-document.querySelectorAll("[data-range]").forEach(b => b.addEventListener("click", () => renderReports(b.dataset.range)));
-function renderReports(range) {
-  let txs = STATE.transactions;
+let currentReportRange = "month";
+document.querySelectorAll("[data-range]").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("[data-range]").forEach(x => x.classList.remove("tab-active"));
+  b.classList.add("tab-active");
+  currentReportRange = b.dataset.range;
+  renderReports(currentReportRange);
+}));
+
+function getRangeDates(range) {
+  const now = new Date();
+  const y = STATE.currentYear || now.getFullYear();
+  const isRealYear = y === now.getFullYear();
+  let start, end, label;
   if (range === "month") {
-    const m = String(new Date().getMonth()+1).padStart(2,"0");
-    txs = txs.filter(t => t.date.slice(5,7) === m);
+    const m = isRealYear ? now.getMonth() : 0;
+    start = new Date(y, m, 1);
+    end = new Date(y, m+1, 0);
+    label = start.toLocaleDateString("he-IL", {month:"long", year:"numeric"});
   } else if (range === "quarter") {
-    const q = Math.floor(new Date().getMonth()/3);
-    txs = txs.filter(t => Math.floor((parseInt(t.date.slice(5,7))-1)/3) === q);
+    const q = isRealYear ? Math.floor(now.getMonth()/3) : 0;
+    start = new Date(y, q*3, 1);
+    end = new Date(y, q*3+3, 0);
+    label = `רבעון ${q+1}, ${y}`;
+  } else if (range === "half") {
+    const h = isRealYear ? (now.getMonth() < 6 ? 0 : 1) : 0;
+    start = new Date(y, h*6, 1);
+    end = new Date(y, h*6+6, 0);
+    label = h === 0 ? `מחצית ראשונה ${y} (ינואר–יוני)` : `מחצית שנייה ${y} (יולי–דצמבר)`;
+  } else if (range === "year") {
+    start = new Date(y, 0, 1);
+    end = new Date(y, 11, 31);
+    label = `שנת ${y}`;
+  } else { // custom
+    const s = $("custom-start")?.value;
+    const e = $("custom-end")?.value;
+    if (!s || !e) return null;
+    start = new Date(s); end = new Date(e);
+    label = `${s.split("-").reverse().join(".")} — ${e.split("-").reverse().join(".")}`;
   }
+  return { startISO: start.toISOString().slice(0,10), endISO: end.toISOString().slice(0,10), label };
+}
+
+function renderReports(range) {
+  if (range === "custom") {
+    $("reports-range-picker").innerHTML = `
+      <div style="display:flex;gap:8px;align-items:end;margin-bottom:10px;">
+        <div style="flex:1;"><label>מתאריך</label><input type="date" id="custom-start"></div>
+        <div style="flex:1;"><label>עד תאריך</label><input type="date" id="custom-end"></div>
+      </div>
+      <button class="btn primary" id="btn-apply-custom" style="margin-bottom:14px;">הצג דוח</button>`;
+    $("btn-apply-custom").addEventListener("click", () => renderReports("custom"));
+    const rd = getRangeDates("custom");
+    if (!rd) { $("rep-range-text").textContent = "בחר טווח תאריכים ולחץ \"הצג דוח\""; return; }
+    return buildReport(rd);
+  }
+  $("reports-range-picker").innerHTML = "";
+  const rd = getRangeDates(range);
+  buildReport(rd);
+}
+
+function buildReport(rd) {
+  const txs = STATE.transactions.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
+  $("rep-range-text").textContent = `טווח: ${rd.label} (${rd.startISO.split("-").reverse().join(".")} – ${rd.endISO.split("-").reverse().join(".")})`;
   const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
   $("rep-income").textContent = fmtILS(income);
@@ -361,13 +512,16 @@ function renderReports(range) {
   const labels = Object.keys(byCat), data = Object.values(byCat);
   const colors = ["#2a78d6","#1baf7a","#eda100","#e34948","#4a3aa7","#e87ba4","#eb6834"];
   if (repChart) repChart.destroy();
-  repChart = new Chart($("rep-chart"), {
-    type: "doughnut",
-    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }] },
-    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
-  });
-  $("rep-legend").innerHTML = labels.map((l,i) => `
-    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("");
+  if (labels.length) {
+    repChart = new Chart($("rep-chart"), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+  }
+  $("rep-legend").innerHTML = labels.length ? labels.map((l,i) => `
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("")
+    : `<p class="center-note">אין הוצאות בטווח זה</p>`;
 }
 $("btn-export-report").addEventListener("click", () => {
   const rows = [["סוג","קטגוריה/דירה","סכום","תאריך","אופן תשלום"]];
@@ -450,6 +604,11 @@ $("btn-save-settings").addEventListener("click", async () => {
   $("hdr-sub").textContent = STATE.settings.address;
   alert("ההגדרות נשמרו");
 });
+$("btn-add-unit").addEventListener("click", async () => {
+  await addUnit();
+  renderSettings();
+  alert("דירה חדשה נוספה. אפשר לערוך שם דייר, טלפון ו-PIN בכרטיס שלה למטה.");
+});
 async function editUnit(unitId) {
   const unit = STATE.units.find(u => u.id === unitId);
   const newName = prompt("שם הדייר הנוכחי (השאר ריק אם הדירה ריקה):", unit.currentName || "");
@@ -523,6 +682,7 @@ $("btn-import-history").addEventListener("click", async () => {
     await addDoc(collection(db, "projects"), historicalData.quotesProject);
     await saveSettings({ historicalImported: true });
     if (STATE.currentYear) await loadTransactions(STATE.currentYear);
+    await computeAllTimeBalance();
     alert("הייבוא הושלם בהצלחה!");
   } catch (e) {
     alert("שגיאה בייבוא: " + e.message);
@@ -542,9 +702,15 @@ async function renderPublicView() {
   const txs = snap.docs.map(d => d.data());
   const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  const allTimeSnap = await getDocs(collection(db, "transactions"));
+  let allIncome = 0, allExpense = 0;
+  allTimeSnap.docs.forEach(d => {
+    const t = d.data();
+    if (t.type === "income") allIncome += (t.amount||0); else allExpense += (t.amount||0);
+  });
   $("pub-bname").textContent = STATE.settings.name;
   $("pub-baddr").textContent = STATE.settings.address;
-  $("pub-balance").textContent = fmtILS(income-expense);
+  $("pub-balance").textContent = fmtILS(allIncome - allExpense);
   $("pub-year").textContent = String(year);
   const total = income+expense || 1;
   $("pub-bar-income").style.width = (income/total*100)+"%";
@@ -558,7 +724,7 @@ function renderResidentView() {
   const unit = STATE.units.find(u => u.id === STATE.residentUnitId);
   const st = unitStatus(unit);
   $("res-unit-num").textContent = unit.number;
-  $("res-balance").textContent = fmtILS(st.expected - st.paid);
+  $("res-balance").textContent = fmtILS(st.debt);
   const txs = STATE.transactions.filter(t => t.unitId === unit.id).sort((a,b)=>b.date.localeCompare(a.date));
   $("res-transactions").innerHTML = txs.length ? txs.map(t => `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
