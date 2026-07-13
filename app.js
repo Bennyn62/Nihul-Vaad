@@ -9,6 +9,11 @@ import {
 } from "https://esm.sh/firebase@10.12.2/firestore";
 import { historicalData } from "./historicalData.js";
 
+if (document.getElementById('error-banner')) {
+  document.getElementById('error-banner').style.cssText = "display:block;background:#16a34a;padding:8px;font-size:13px;direction:rtl;text-align:right;position:fixed;top:0;left:0;right:0;z-index:9999;";
+  document.getElementById('error-banner').textContent = "DEBUG: app.js התחיל לרוץ...";
+}
+
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
@@ -1029,3 +1034,7 @@ function renderResidentView() {
 // wire dashboard shortcut buttons
 $("btn-goto-add-income").addEventListener("click", () => showView("view-add-income"));
 $("btn-goto-add-expense").addEventListener("click", () => showView("view-add-expense"));
+
+if (document.getElementById('error-banner')) {
+  document.getElementById('error-banner').textContent = "DEBUG: app.js סיים לרוץ בהצלחה, כל הכפתורים אמורים לעבוד עכשיו.";
+}

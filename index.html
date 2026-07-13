@@ -10,6 +10,21 @@
 <body>
 <div id="app">
 
+  <div id="error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9999;background:#dc2626;color:#fff;padding:14px;font-size:14px;direction:rtl;text-align:right;"></div>
+  <script>
+    function showErrorBanner(msg) {
+      var b = document.getElementById('error-banner');
+      b.style.display = 'block';
+      b.innerHTML += '<div style="margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.3);padding-bottom:6px;">שגיאה: ' + msg + '</div>';
+    }
+    window.addEventListener('error', function(e) {
+      showErrorBanner((e.message || 'שגיאה לא ידועה') + ' (קובץ: ' + (e.filename||'') + ', שורה: ' + (e.lineno||'') + ')');
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+      showErrorBanner('הבטחה נכשלה: ' + (e.reason && e.reason.message ? e.reason.message : e.reason));
+    });
+  </script>
+
   <header class="topbar">
     <div class="title-block">
       <h1 id="hdr-title">ניהול ועד</h1>
