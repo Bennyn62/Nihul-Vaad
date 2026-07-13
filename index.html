@@ -138,10 +138,8 @@
         <select id="inc-method">
           <option>מזומן</option><option>העברה בנקאית</option><option>צ'ק</option><option>הוראת קבע</option>
         </select>
-        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
-          <span style="font-size:15px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך רישום</span>
-          <span style="font-size:15px;font-weight:600;" id="inc-date-display"></span>
-        </div>
+        <label>תאריך רישום <span style="color:var(--text-muted);font-weight:400;">(אפשר לשנות להזנת נתונים משנים קודמות)</span></label>
+        <input type="date" id="inc-date-input" style="margin-bottom:14px;">
         <label>הערה (לא חובה)</label>
         <input type="text" id="inc-note">
         <button class="btn success" id="btn-save-income">שמור הכנסה</button>
@@ -167,10 +165,8 @@
         <input type="text" id="exp-supplier">
         <label>תיאור (לא חובה)</label>
         <input type="text" id="exp-desc">
-        <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
-          <span style="font-size:15px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך</span>
-          <span style="font-size:15px;font-weight:600;" id="exp-date-display"></span>
-        </div>
+        <label>תאריך <span style="color:var(--text-muted);font-weight:400;">(אפשר לשנות להזנת נתונים משנים קודמות)</span></label>
+        <input type="date" id="exp-date-input" style="margin-bottom:14px;">
         <button class="btn danger" id="btn-save-expense">שמור הוצאה</button>
       </div>
     </section>

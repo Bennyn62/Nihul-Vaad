@@ -79,11 +79,17 @@ async function computeAllTimeBalance() {
   const snap = await getDocs(collection(db, "transactions"));
   let income = 0, expense = 0;
   const paidByUnit = {};
+  const earliestYearByUnit = {};
   STATE.allTransactionsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   STATE.allTransactionsCache.forEach(t => {
     if (t.type === "income") {
       income += (t.amount||0);
-      if (t.unitId) paidByUnit[t.unitId] = (paidByUnit[t.unitId]||0) + (t.amount||0);
+      if (t.unitId) {
+        paidByUnit[t.unitId] = (paidByUnit[t.unitId]||0) + (t.amount||0);
+        if (t.year && (!earliestYearByUnit[t.unitId] || t.year < earliestYearByUnit[t.unitId])) {
+          earliestYearByUnit[t.unitId] = t.year;
+        }
+      }
     } else {
       expense += (t.amount||0);
     }
@@ -92,7 +98,9 @@ async function computeAllTimeBalance() {
   const nowYear = new Date().getFullYear();
   STATE.unitDebts = {};
   STATE.units.forEach(u => {
-    const startYear = u.createdYear || 2023;
+    // use whichever is earlier: the unit's recorded creation year, or the earliest
+    // year it actually has payments for (covers manually-backfilled years like 2022)
+    const startYear = Math.min(u.createdYear || 2023, earliestYearByUnit[u.id] || 9999);
     const yearsActive = Math.max(1, nowYear - startYear + 1);
     const expected = STATE.settings.fee * 12 * yearsActive;
     const paid = paidByUnit[u.id] || 0;
@@ -104,7 +112,7 @@ async function computeAllTimeBalance() {
 async function saveTransaction(tx) {
   const ref = await addDoc(collection(db, "transactions"), tx);
   const saved = { id: ref.id, ...tx };
-  STATE.transactions.push(saved);
+  if (tx.year === STATE.currentYear) STATE.transactions.push(saved);
   STATE.allTransactionsCache.push(saved);
   STATE.allTimeBalance += (tx.type === "income" ? tx.amount : -tx.amount);
   return ref.id;
@@ -219,7 +227,7 @@ async function enterApp() {
 }
 function populateYearSelector() {
   const realYear = new Date().getFullYear();
-  const earliestYear = 2023;
+  const earliestYear = 2022;
   const years = [];
   for (let y = realYear + 1; y >= earliestYear; y--) years.push(y);
   $("dash-year-select").innerHTML = years.map(y =>
@@ -330,6 +338,10 @@ function showViewRaw(id) {
 }
 
 // ---------- Add income ----------
+function defaultDateForCurrentYear() {
+  const realYear = new Date().getFullYear();
+  return STATE.currentYear === realYear ? todayISO() : `${STATE.currentYear}-01-01`;
+}
 function renderAddIncome() {
   $("inc-unit").innerHTML = STATE.units.map(u =>
     `<option value="${u.id}">דירה ${u.number} · ${u.currentName || "ריקה"}</option>`).join("");
@@ -341,7 +353,7 @@ function renderAddIncome() {
     c.classList.toggle("selected");
     updateIncomeAmount();
   }));
-  $("inc-date-display").textContent = "היום · " + todayISO().split("-").reverse().join(".");
+  $("inc-date-input").value = defaultDateForCurrentYear();
   $("inc-amount").oninput = updateIncomeBreakdown;
   updateIncomeAmount();
   $("inc-type").onchange = () => {
@@ -395,12 +407,13 @@ $("btn-save-income").addEventListener("click", async () => {
       advanceNote = `מכסה ${fullMonths} חודשים במלואם + מקדמה של ${fmtILS(remainder)} לחודש הבא`;
     }
   }
+  const chosenDate = $("inc-date-input").value || todayISO();
   const tx = {
     type: "income", unitId,
     category: type === "monthly" ? "דמי ועד" : (type === "culture" ? "תרבות הדיור" : "אחר"),
     amount, months: selectedMonths, method: $("inc-method").value,
-    date: todayISO(), note: $("inc-note").value || "", advanceNote,
-    year: STATE.currentYear, createdAt: Date.now()
+    date: chosenDate, note: $("inc-note").value || "", advanceNote,
+    year: parseInt(chosenDate.slice(0,4)), createdAt: Date.now()
   };
   const id = await saveTransaction(tx);
   if (STATE.unitDebts[unitId]) {
@@ -412,16 +425,17 @@ $("btn-save-income").addEventListener("click", async () => {
 
 // ---------- Add expense ----------
 function renderAddExpense() {
-  $("exp-date-display").textContent = "היום · " + todayISO().split("-").reverse().join(".");
+  $("exp-date-input").value = defaultDateForCurrentYear();
 }
 $("btn-save-expense").addEventListener("click", async () => {
   const amount = parseFloat($("exp-amount").value || "0");
   if (!amount) { alert("נא להזין סכום"); return; }
+  const chosenDate = $("exp-date-input").value || todayISO();
   const tx = {
     type: "expense", category: $("exp-category").value, amount,
     method: $("exp-method").value, supplier: $("exp-supplier").value,
-    desc: $("exp-desc").value, date: todayISO(),
-    year: STATE.currentYear, createdAt: Date.now()
+    desc: $("exp-desc").value, date: chosenDate,
+    year: parseInt(chosenDate.slice(0,4)), createdAt: Date.now()
   };
   await saveTransaction(tx);
   alert("ההוצאה נשמרה");
