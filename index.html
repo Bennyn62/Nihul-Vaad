@@ -23,7 +23,7 @@
     <!-- ========== מסך כניסה ========== -->
     <section id="view-entry">
       <div class="card">
-        <p style="font-weight:700;font-size:15px;margin:0 0 14px;">כניסה למערכת</p>
+        <p style="font-weight:700;font-size:17px;margin:0 0 14px;">כניסה למערכת</p>
         <div class="btn-row">
           <button class="btn tab-active" id="tab-admin-login">כניסת ועד</button>
           <button class="btn tab-inactive" id="tab-resident-login">כניסת דייר</button>
@@ -61,16 +61,21 @@
           <div class="metric"><p class="label">שנה נוכחית</p><p class="value" id="pub-year">-</p></div>
         </div>
         <div style="margin-bottom:14px;">
-          <p style="font-size:12px;color:var(--text-secondary);margin:0 0 8px;">הכנסות מול הוצאות</p>
+          <p style="font-size:14px;color:var(--text-secondary);margin:0 0 8px;">הכנסות מול הוצאות</p>
           <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--surface-2);">
             <div id="pub-bar-income" style="background:var(--green);"></div>
             <div id="pub-bar-expense" style="background:var(--red);"></div>
           </div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-secondary);margin-top:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);margin-top:6px;">
             <span id="pub-income-txt"></span>
             <span id="pub-expense-txt"></span>
           </div>
         </div>
+        <p style="font-size:14px;font-weight:600;margin:0 0 8px;">התפלגות הוצאות לפי קטגוריה</p>
+        <div style="position:relative;width:100%;height:200px;margin-bottom:10px;">
+          <canvas id="pub-chart" role="img" aria-label="התפלגות הוצאות לפי קטגוריה"></canvas>
+        </div>
+        <div id="pub-legend" style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--text-secondary);"></div>
       </div>
       <button class="btn ghost" id="btn-back-entry">חזרה למסך כניסה</button>
     </section>
@@ -78,7 +83,7 @@
     <!-- ========== דשבורד ועד ========== -->
     <section id="view-dashboard" class="hidden">
       <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-        <select id="dash-year-select" style="width:auto;margin-bottom:0;font-size:13px;padding:6px 10px;"></select>
+        <select id="dash-year-select" style="width:auto;margin-bottom:0;font-size:15px;padding:6px 10px;"></select>
       </div>
       <div class="metric-grid cols-3">
         <div class="metric"><p class="label">יתרת קופה (מצטבר)</p><p class="value" id="d-balance">-</p></div>
@@ -89,7 +94,7 @@
         <button class="btn success" id="btn-goto-add-income"><i class="ti ti-plus"></i> הכנסה חדשה</button>
         <button class="btn danger" id="btn-goto-add-expense"><i class="ti ti-minus"></i> הוצאה חדשה</button>
       </div>
-      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">סטטוס דירות</p>
+      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">סטטוס דירות</p>
       <div class="unit-grid" id="dashboard-units"></div>
     </section>
 
@@ -101,12 +106,12 @@
     <!-- ========== היסטוריית דירה ========== -->
     <section id="view-unit-detail" class="hidden">
       <div class="card">
-        <p style="font-weight:700;font-size:15px;margin:0 0 4px;" id="ud-title">דירה</p>
-        <p style="font-size:12px;color:var(--text-secondary);margin:0 0 14px;" id="ud-sub"></p>
+        <p style="font-weight:700;font-size:17px;margin:0 0 4px;" id="ud-title">דירה</p>
+        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 14px;" id="ud-sub"></p>
         <div id="ud-tenant-history"></div>
       </div>
       <div id="ud-cumulative"></div>
-      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">תנועות</p>
+      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">תנועות</p>
       <div id="ud-transactions"></div>
     </section>
 
@@ -127,14 +132,15 @@
         </div>
         <label>סכום כולל</label>
         <input type="number" id="inc-amount">
-        <p style="font-size:11px;color:var(--text-muted);margin:-10px 0 14px;" id="inc-amount-hint"></p>
+        <p style="font-size:13px;color:var(--text-muted);margin:-10px 0 6px;" id="inc-amount-hint"></p>
+        <p style="font-size:14px;margin:-2px 0 14px;" id="inc-amount-breakdown"></p>
         <label>אופן תשלום</label>
         <select id="inc-method">
           <option>מזומן</option><option>העברה בנקאית</option><option>צ'ק</option><option>הוראת קבע</option>
         </select>
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
-          <span style="font-size:13px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך רישום</span>
-          <span style="font-size:13px;font-weight:600;" id="inc-date-display"></span>
+          <span style="font-size:15px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך רישום</span>
+          <span style="font-size:15px;font-weight:600;" id="inc-date-display"></span>
         </div>
         <label>הערה (לא חובה)</label>
         <input type="text" id="inc-note">
@@ -162,9 +168,12 @@
         <label>תיאור (לא חובה)</label>
         <input type="text" id="exp-desc">
         <div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px;">
-          <span style="font-size:13px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך</span>
-          <span style="font-size:13px;font-weight:600;" id="exp-date-display"></span>
+          <span style="font-size:15px;color:var(--text-secondary);"><i class="ti ti-calendar"></i> תאריך</span>
+          <span style="font-size:15px;font-weight:600;" id="exp-date-display"></span>
         </div>
+        <label>חשבונית / קבלה (לא חובה)</label>
+        <input type="file" id="exp-photo" accept="image/*" capture="environment" style="margin-bottom:10px;">
+        <div id="exp-photo-preview" style="margin-bottom:14px;"></div>
         <button class="btn danger" id="btn-save-expense">שמור הוצאה</button>
       </div>
     </section>
@@ -187,8 +196,8 @@
         <div class="total-row"><span>סה"כ שולם</span><span class="amt" id="rc-total"></span></div>
         <div id="rc-sig-block">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-            <span style="font-size:12px;color:var(--text-secondary);">חתימת הוועד</span>
-            <button class="btn ghost" style="width:auto;padding:3px 8px;font-size:11px;" id="btn-edit-sig">ערוך חתימה</button>
+            <span style="font-size:14px;color:var(--text-secondary);">חתימת הוועד</span>
+            <button class="btn ghost" style="width:auto;padding:3px 8px;font-size:13px;" id="btn-edit-sig">ערוך חתימה</button>
           </div>
           <div class="sig-box" id="rc-sig-display"></div>
         </div>
@@ -202,26 +211,45 @@
 
     <!-- ========== דוחות ========== -->
     <section id="view-reports" class="hidden">
-      <div class="btn-row" style="flex-wrap:wrap;gap:6px;">
-        <button class="btn" data-range="month" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">חודשי</button>
-        <button class="btn" data-range="quarter" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">רבעוני</button>
-        <button class="btn" data-range="half" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">חצי שנתי</button>
-        <button class="btn" data-range="year" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">שנתי</button>
-        <button class="btn" data-range="custom" style="width:auto;flex:none;padding:6px 12px;font-size:12px;">טווח מותאם</button>
+      <div class="btn-row">
+        <button class="btn tab-active" id="repmode-freeform" data-mode="freeform">טווח תאריכים חופשי</button>
+        <button class="btn tab-inactive" id="repmode-byyear" data-mode="byyear">לפי שנה ותקופה</button>
       </div>
-      <div id="reports-range-picker" style="margin-bottom:10px;"></div>
-      <p style="font-size:12px;color:var(--text-secondary);margin:0 0 14px;" id="rep-range-text"></p>
+
+      <div id="repmode-freeform-panel">
+        <div style="display:flex;gap:8px;align-items:end;margin-bottom:10px;">
+          <div style="flex:1;"><label>מתאריך</label><input type="date" id="custom-start"></div>
+          <div style="flex:1;"><label>עד תאריך</label><input type="date" id="custom-end"></div>
+        </div>
+        <button class="btn primary" id="btn-apply-custom" style="margin-bottom:14px;">הצג דוח</button>
+      </div>
+
+      <div id="repmode-byyear-panel" class="hidden">
+        <label>שנה</label>
+        <select id="report-year-select" style="margin-bottom:10px;"></select>
+        <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:4px;">
+          <button class="btn" data-period="quarter" style="width:auto;flex:none;padding:6px 12px;font-size:14px;">רבעוני</button>
+          <button class="btn" data-period="half" style="width:auto;flex:none;padding:6px 12px;font-size:14px;">חצי שנתי</button>
+          <button class="btn" data-period="year" style="width:auto;flex:none;padding:6px 12px;font-size:14px;">שנתי</button>
+        </div>
+        <div id="report-subperiod-picker" style="margin:10px 0;"></div>
+      </div>
+
+      <p style="font-size:14px;color:var(--text-secondary);margin:14px 0;" id="rep-range-text"></p>
       <div class="metric-grid cols-3">
         <div class="metric"><p class="label">הכנסות</p><p class="value pos" id="rep-income">-</p></div>
         <div class="metric"><p class="label">הוצאות</p><p class="value neg" id="rep-expense">-</p></div>
         <div class="metric"><p class="label">מאזן</p><p class="value" id="rep-balance">-</p></div>
       </div>
-      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">פילוח הוצאות לפי קטגוריה</p>
+      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">פילוח הוצאות לפי קטגוריה</p>
       <div style="position:relative;width:100%;height:220px;margin-bottom:12px;">
         <canvas id="rep-chart" role="img" aria-label="פילוח הוצאות לפי קטגוריה"></canvas>
       </div>
-      <div id="rep-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;font-size:12px;color:var(--text-secondary);"></div>
-      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">רשימה מפורטת של הוצאות</p>
+      <div id="rep-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;font-size:14px;color:var(--text-secondary);"></div>
+      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">רשימה מפורטת של הכנסות</p>
+      <div id="rep-income-list"></div>
+
+      <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">רשימה מפורטת של הוצאות</p>
       <div id="rep-expense-list"></div>
       <button class="btn" id="btn-export-report" style="margin-top:14px;"><i class="ti ti-download"></i> ייצוא דוח (CSV)</button>
     </section>
@@ -250,14 +278,14 @@
         <button class="btn success" id="btn-save-settings">שמור הגדרות</button>
       </div>
       <div class="card" id="import-card">
-        <p style="font-weight:700;font-size:14px;margin:0 0 8px;">ייבוא נתונים היסטוריים</p>
-        <p style="font-size:12px;color:var(--text-secondary);margin:0 0 12px;" id="import-summary">טוען...</p>
+        <p style="font-weight:700;font-size:16px;margin:0 0 8px;">ייבוא נתונים היסטוריים</p>
+        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;" id="import-summary">טוען...</p>
         <button class="btn primary" id="btn-import-history">ייבא נתונים היסטוריים (2023–2026)</button>
-        <p style="font-size:11px;color:var(--text-muted);margin:10px 0 0;">שים לב: תאריכי תשלומי דמי הוועד ברמת דירה לא נשמרו בקובץ המקורי בפירוט (רק סכום מצטבר לחודש) — הם יובאו עם תאריך משוער (ה-10 לחודש). ההוצאות יובאו עם התאריך המדויק כפי שמופיע בקובץ. גיליון "2022" (שהתברר כזהה בפועל ל-2023) לא יובא — נתוני 2022 האמיתיים יוזנו על ידך ידנית.</p>
-        <p id="import-done-note" class="hidden" style="font-size:12px;color:var(--text-success);margin:10px 0 0;"><i class="ti ti-check"></i> הייבוא בוצע בעבר.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin:10px 0 0;">שים לב: תאריכי תשלומי דמי הוועד ברמת דירה לא נשמרו בקובץ המקורי בפירוט (רק סכום מצטבר לחודש) — הם יובאו עם תאריך משוער (ה-10 לחודש). ההוצאות יובאו עם התאריך המדויק כפי שמופיע בקובץ. גיליון "2022" (שהתברר כזהה בפועל ל-2023) לא יובא — נתוני 2022 האמיתיים יוזנו על ידך ידנית.</p>
+        <p id="import-done-note" class="hidden" style="font-size:14px;color:var(--text-success);margin:10px 0 0;"><i class="ti ti-check"></i> הייבוא בוצע בעבר.</p>
       </div>
 
-      <p style="font-weight:700;font-size:14px;margin:16px 0 10px;">ניהול דירות ודיירים</p>
+      <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">ניהול דירות ודיירים</p>
       <div id="settings-units-list"></div>
       <button class="btn" id="btn-add-unit"><i class="ti ti-plus"></i> הוסף דירה חדשה</button>
     </section>
@@ -266,10 +294,22 @@
     <section id="view-resident" class="hidden">
       <div class="metric-grid">
         <div class="metric"><p class="label">דירה שלי</p><p class="value" id="res-unit-num">-</p></div>
-        <div class="metric"><p class="label">יתרה/חוב</p><p class="value" id="res-balance">-</p></div>
+        <div class="metric"><p class="label">יתרה/חוב שלי</p><p class="value" id="res-balance">-</p></div>
       </div>
-      <p style="font-weight:700;font-size:14px;margin:0 0 10px;">היסטוריית תשלומים</p>
+      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">היסטוריית תשלומים שלי</p>
       <div id="res-transactions"></div>
+
+      <p style="font-weight:700;font-size:16px;margin:20px 0 10px;">מצב כספי כללי של הבניין</p>
+      <div class="metric-grid cols-3">
+        <div class="metric"><p class="label">הכנסות השנה</p><p class="value pos" id="res-b-income">-</p></div>
+        <div class="metric"><p class="label">הוצאות השנה</p><p class="value neg" id="res-b-expense">-</p></div>
+        <div class="metric"><p class="label">יתרת קופה</p><p class="value" id="res-b-balance">-</p></div>
+      </div>
+      <p style="font-size:14px;font-weight:600;margin:0 0 8px;">התפלגות הוצאות לפי קטגוריה</p>
+      <div style="position:relative;width:100%;height:200px;margin-bottom:10px;">
+        <canvas id="res-chart" role="img" aria-label="התפלגות הוצאות לפי קטגוריה"></canvas>
+      </div>
+      <div id="res-legend" style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--text-secondary);"></div>
     </section>
 
   </main>

@@ -5,13 +5,17 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
-  updateDoc, query, where, orderBy, writeBatch
+  updateDoc, deleteDoc, query, where, orderBy, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {
+  getStorage, ref as storageRef, uploadBytes, getDownloadURL
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { historicalData } from "./historicalData.js";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
+const storage = getStorage(fbApp);
 
 const HEB_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 const todayISO = () => new Date().toISOString().slice(0,10);
@@ -27,6 +31,7 @@ let STATE = {
   currentYear: new Date().getFullYear(),
   allTimeBalance: 0,
   unitDebts: {},
+  allTransactionsCache: [],
   pendingReceipt: null
 };
 
@@ -78,8 +83,8 @@ async function computeAllTimeBalance() {
   const snap = await getDocs(collection(db, "transactions"));
   let income = 0, expense = 0;
   const paidByUnit = {};
-  snap.docs.forEach(d => {
-    const t = d.data();
+  STATE.allTransactionsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  STATE.allTransactionsCache.forEach(t => {
     if (t.type === "income") {
       income += (t.amount||0);
       if (t.unitId) paidByUnit[t.unitId] = (paidByUnit[t.unitId]||0) + (t.amount||0);
@@ -102,7 +107,9 @@ async function computeAllTimeBalance() {
 }
 async function saveTransaction(tx) {
   const ref = await addDoc(collection(db, "transactions"), tx);
-  STATE.transactions.push({ id: ref.id, ...tx });
+  const saved = { id: ref.id, ...tx };
+  STATE.transactions.push(saved);
+  STATE.allTransactionsCache.push(saved);
   STATE.allTimeBalance += (tx.type === "income" ? tx.amount : -tx.amount);
   return ref.id;
 }
@@ -125,10 +132,7 @@ function showView(id) {
   if (id === "view-add-income") renderAddIncome();
   if (id === "view-add-expense") renderAddExpense();
   if (id === "view-reports") {
-    document.querySelectorAll("[data-range]").forEach(x => x.classList.remove("tab-active"));
-    document.querySelector('[data-range="month"]').classList.add("tab-active");
-    currentReportRange = "month";
-    renderReports("month");
+    initReportsView();
   }
   if (id === "view-projects") renderProjects();
   if (id === "view-settings") renderSettings();
@@ -205,10 +209,10 @@ async function enterApp() {
   $("hdr-title").textContent = STATE.settings.name || "ניהול ועד";
   $("hdr-sub").textContent = STATE.settings.address || "";
   await loadTransactions(STATE.currentYear);
+  await computeAllTimeBalance();
   $("view-entry").classList.add("hidden");
   $("view-public").classList.add("hidden");
   if (STATE.role === "admin") {
-    await computeAllTimeBalance();
     populateYearSelector();
     $("admin-tabbar").classList.remove("hidden");
     showView("view-dashboard");
@@ -279,9 +283,9 @@ async function openUnitDetail(unitId) {
   $("ud-sub").textContent = unit.currentName ? `דייר נוכחי: ${unit.currentName}` : "דירה ריקה";
   const hist = (unit.history||[]).slice().reverse();
   $("ud-tenant-history").innerHTML = hist.length ? hist.map(h => `
-    <div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-top:1px solid var(--border);">
+    <div style="display:flex;justify-content:space-between;font-size:14px;padding:4px 0;border-top:1px solid var(--border);">
       <span>${h.name}</span><span style="color:var(--text-secondary);">${h.startDate||""} — ${h.endDate||"היום"}</span>
-    </div>`).join("") : `<p style="font-size:12px;color:var(--text-muted);">אין היסטוריית דיירים קודמים</p>`;
+    </div>`).join("") : `<p style="font-size:14px;color:var(--text-muted);">אין היסטוריית דיירים קודמים</p>`;
 
   showViewRaw("view-unit-detail");
   renderUnitCumulativeCard(unitId);
@@ -290,10 +294,10 @@ async function openUnitDetail(unitId) {
   $("ud-transactions").innerHTML = txs.length ? txs.map(t => `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;">
-        <span style="font-size:13px;">${t.category||"דמי ועד"}</span>
-        <span style="font-size:13px;font-weight:700;">${fmtILS(t.amount)}</span>
+        <span style="font-size:15px;">${t.category||"דמי ועד"}</span>
+        <span style="font-size:15px;font-weight:700;">${fmtILS(t.amount)}</span>
       </div>
-      <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">${t.date}</p>
+      <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date}</p>
     </div>`).join("") : `<p class="center-note">אין תנועות עדיין בשנה הנוכחית שנבחרה</p>`;
 }
 function renderUnitCumulativeCard(unitId) {
@@ -301,14 +305,14 @@ function renderUnitCumulativeCard(unitId) {
   const cum = getUnitCumulative(unitId);
   $("ud-cumulative").innerHTML = `
     <div class="card">
-      <p style="font-weight:700;font-size:13px;margin:0 0 8px;">יתרת חוב מצטברת (הערכה, כל השנים)</p>
-      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <p style="font-weight:700;font-size:15px;margin:0 0 8px;">יתרת חוב מצטברת (הערכה, כל השנים)</p>
+      <table style="width:100%;font-size:14px;border-collapse:collapse;">
         <tr><td style="color:var(--text-secondary);padding:3px 0;">סה"כ שולם אי-פעם</td><td style="text-align:left;">${fmtILS(cum.paid)}</td></tr>
         <tr><td style="color:var(--text-secondary);padding:3px 0;">צפי (${STATE.settings.fee}₪ × 12 חודשים × שנות פעילות)</td><td style="text-align:left;">${fmtILS(cum.expected)}</td></tr>
         <tr><td style="color:var(--text-secondary);padding:3px 0;">התאמה ידנית</td><td style="text-align:left;">${fmtILS(cum.adjustment)}</td></tr>
         <tr style="border-top:1px solid var(--border-strong);"><td style="padding:6px 0 0;font-weight:700;">יתרת חוב</td><td style="text-align:left;padding:6px 0 0;font-weight:700;color:${cum.debt>0?"var(--red)":"var(--green)"};">${fmtILS(cum.debt)}</td></tr>
       </table>
-      <p style="font-size:11px;color:var(--text-muted);margin:8px 0 10px;">זו הערכה שמניחה 12 חודשי תשלום בכל שנה מאז שהדירה נוצרה במערכת (${unit.createdYear||2023}). אם הדירה הייתה ריקה חלק מהזמן, השתמש ב"התאמה ידנית" (מספר שלילי מקטין את החוב) כדי לתקן.</p>
+      <p style="font-size:13px;color:var(--text-muted);margin:8px 0 10px;">זו הערכה שמניחה 12 חודשי תשלום בכל שנה מאז שהדירה נוצרה במערכת (${unit.createdYear||2023}). אם הדירה הייתה ריקה חלק מהזמן, השתמש ב"התאמה ידנית" (מספר שלילי מקטין את החוב) כדי לתקן.</p>
       <button class="btn ghost" id="btn-edit-debt-adj">ערוך התאמה ידנית</button>
     </div>`;
   $("btn-edit-debt-adj").addEventListener("click", async () => {
@@ -342,6 +346,7 @@ function renderAddIncome() {
     updateIncomeAmount();
   }));
   $("inc-date-display").textContent = "היום · " + todayISO().split("-").reverse().join(".");
+  $("inc-amount").oninput = updateIncomeBreakdown;
   updateIncomeAmount();
   $("inc-type").onchange = () => {
     $("inc-months-block").classList.toggle("hidden", $("inc-type").value !== "monthly");
@@ -354,9 +359,27 @@ function updateIncomeAmount() {
   if (type === "monthly") {
     const total = selected * STATE.settings.fee;
     $("inc-amount").value = total;
-    $("inc-amount-hint").textContent = selected ? `${fmtILS(STATE.settings.fee)} × ${selected} חודשים שנבחרו` : "בחר חודשים למעלה";
+    $("inc-amount-hint").textContent = selected ? `${fmtILS(STATE.settings.fee)} × ${selected} חודשים שנבחרו` : "בחר חודשים למעלה, או הזן כל סכום — המערכת תחשב כיסוי אוטומטי";
   } else {
     $("inc-amount-hint").textContent = "";
+  }
+  updateIncomeBreakdown();
+}
+function updateIncomeBreakdown() {
+  const type = $("inc-type").value;
+  const box = $("inc-amount-breakdown");
+  if (type !== "monthly") { box.textContent = ""; return; }
+  const amount = parseFloat($("inc-amount").value || "0");
+  const fee = STATE.settings.fee;
+  if (!amount || !fee) { box.textContent = ""; return; }
+  const fullMonths = Math.floor(amount / fee);
+  const remainder = Math.round((amount - fullMonths*fee) * 100) / 100;
+  if (fullMonths === 0) {
+    box.innerHTML = `<span style="color:var(--amber);">תשלום חלקי: ${fmtILS(amount)} מתוך ${fmtILS(fee)} לחודש (יירשם כמקדמה על חשבון החודש)</span>`;
+  } else if (remainder > 0) {
+    box.innerHTML = `<span style="color:var(--blue);">מכסה ${fullMonths} חוד׳ במלואם (${fmtILS(fullMonths*fee)}) + עודף ${fmtILS(remainder)} שיירשם כמקדמה לחודש הבא</span>`;
+  } else {
+    box.innerHTML = `<span style="color:var(--green);">מכסה ${fullMonths} חודשים במלואם, ללא עודף</span>`;
   }
 }
 $("btn-save-income").addEventListener("click", async () => {
@@ -365,11 +388,22 @@ $("btn-save-income").addEventListener("click", async () => {
   const amount = parseFloat($("inc-amount").value || "0");
   if (!amount) { alert("נא להזין סכום"); return; }
   const selectedMonths = Array.from(document.querySelectorAll("#inc-months-grid .chip.selected")).map(c => parseInt(c.dataset.m));
+  let advanceNote = "";
+  if (type === "monthly" && STATE.settings.fee) {
+    const fee = STATE.settings.fee;
+    const fullMonths = Math.floor(amount / fee);
+    const remainder = Math.round((amount - fullMonths*fee) * 100) / 100;
+    if (fullMonths === 0) {
+      advanceNote = `תשלום חלקי: ${fmtILS(amount)} מתוך ${fmtILS(fee)} על חשבון החודש`;
+    } else if (remainder > 0) {
+      advanceNote = `מכסה ${fullMonths} חודשים במלואם + מקדמה של ${fmtILS(remainder)} לחודש הבא`;
+    }
+  }
   const tx = {
     type: "income", unitId,
     category: type === "monthly" ? "דמי ועד" : (type === "culture" ? "תרבות הדיור" : "אחר"),
     amount, months: selectedMonths, method: $("inc-method").value,
-    date: todayISO(), note: $("inc-note").value || "",
+    date: todayISO(), note: $("inc-note").value || "", advanceNote,
     year: STATE.currentYear, createdAt: Date.now()
   };
   const id = await saveTransaction(tx);
@@ -383,19 +417,49 @@ $("btn-save-income").addEventListener("click", async () => {
 // ---------- Add expense ----------
 function renderAddExpense() {
   $("exp-date-display").textContent = "היום · " + todayISO().split("-").reverse().join(".");
+  $("exp-photo").value = "";
+  $("exp-photo-preview").innerHTML = "";
+  $("exp-photo").onchange = () => {
+    const file = $("exp-photo").files[0];
+    if (!file) { $("exp-photo-preview").innerHTML = ""; return; }
+    const url = URL.createObjectURL(file);
+    $("exp-photo-preview").innerHTML = `<img src="${url}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid var(--border);">`;
+  };
 }
 $("btn-save-expense").addEventListener("click", async () => {
   const amount = parseFloat($("exp-amount").value || "0");
   if (!amount) { alert("נא להזין סכום"); return; }
+  const btn = $("btn-save-expense");
+  btn.disabled = true;
+  const originalLabel = btn.textContent;
   const tx = {
     type: "expense", category: $("exp-category").value, amount,
     method: $("exp-method").value, supplier: $("exp-supplier").value,
     desc: $("exp-desc").value, date: todayISO(),
     year: STATE.currentYear, createdAt: Date.now()
   };
-  await saveTransaction(tx);
-  alert("ההוצאה נשמרה");
-  showView("view-dashboard");
+  try {
+    const txId = await saveTransaction(tx);
+    const file = $("exp-photo").files[0];
+    if (file) {
+      btn.textContent = "מעלה תמונה...";
+      const path = `receipts/${txId}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"")}`;
+      const fileRef = storageRef(storage, path);
+      await uploadBytes(fileRef, file);
+      const url = await getDownloadURL(fileRef);
+      await updateDoc(doc(db, "transactions", txId), { receiptImageUrl: url });
+      tx.receiptImageUrl = url;
+      const cached = STATE.allTransactionsCache.find(t => t.id === txId);
+      if (cached) cached.receiptImageUrl = url;
+    }
+    alert("ההוצאה נשמרה" + (file ? " עם התמונה" : ""));
+    showView("view-dashboard");
+  } catch (e) {
+    alert("שגיאה בשמירה: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
 });
 
 // ---------- Receipt ----------
@@ -409,9 +473,24 @@ function openReceipt(tx) {
   $("rc-unit").textContent = unit ? unit.number : "";
   $("rc-name").textContent = unit ? unit.currentName : "";
   $("rc-method").textContent = tx.method;
-  const lines = tx.months && tx.months.length
-    ? tx.months.map(m => `<div class="line-item"><span>${tx.category} · ${HEB_MONTHS[m]} ${STATE.currentYear}</span><span>${fmtILS(STATE.settings.fee)}</span></div>`).join("")
-    : `<div class="line-item"><span>${tx.category}</span><span>${fmtILS(tx.amount)}</span></div>`;
+  let lines;
+  if (tx.category === "דמי ועד" && STATE.settings.fee) {
+    const fee = STATE.settings.fee;
+    const fullMonths = Math.floor(tx.amount / fee);
+    const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
+    const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
+    const items = [];
+    for (let i = 0; i < fullMonths; i++) {
+      items.push(`<div class="line-item"><span>${tx.category} · ${HEB_MONTHS[(startMonth+i)%12]} ${STATE.currentYear}</span><span>${fmtILS(fee)}</span></div>`);
+    }
+    if (remainder > 0) {
+      const label = fullMonths > 0 ? `מקדמה לחודש ${HEB_MONTHS[(startMonth+fullMonths)%12]}` : "תשלום חלקי על חשבון החודש";
+      items.push(`<div class="line-item"><span style="color:var(--blue);">${label}</span><span>${fmtILS(remainder)}</span></div>`);
+    }
+    lines = items.length ? items.join("") : `<div class="line-item"><span>${tx.category}</span><span>${fmtILS(tx.amount)}</span></div>`;
+  } else {
+    lines = `<div class="line-item"><span>${tx.category}</span><span>${fmtILS(tx.amount)}</span></div>`;
+  }
   $("rc-lines").innerHTML = lines;
   $("rc-total").textContent = fmtILS(tx.amount);
   $("rc-sent-badge").classList.add("hidden");
@@ -419,7 +498,7 @@ function openReceipt(tx) {
   $("rc-sig-block").classList.remove("hidden");
   $("rc-sig-display").innerHTML = STATE.settings.signatureDataUrl
     ? `<img src="${STATE.settings.signatureDataUrl}" style="max-height:100%;max-width:100%;">`
-    : `<span style="font-size:12px;color:var(--text-muted);">אין חתימה שמורה — הוסף בהגדרות</span>`;
+    : `<span style="font-size:14px;color:var(--text-muted);">אין חתימה שמורה — הוסף בהגדרות</span>`;
   showViewRaw("view-receipt");
 }
 $("btn-edit-sig").addEventListener("click", () => showView("view-settings"));
@@ -439,68 +518,83 @@ $("btn-share-whatsapp").addEventListener("click", async () => {
 
 // ---------- Reports ----------
 let repChart = null;
-let currentReportRange = "month";
-document.querySelectorAll("[data-range]").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("[data-range]").forEach(x => x.classList.remove("tab-active"));
-  b.classList.add("tab-active");
-  currentReportRange = b.dataset.range;
-  renderReports(currentReportRange);
-}));
+let lastReportRange = null; // {startISO, endISO, label}
 
-function getRangeDates(range) {
+function initReportsView() {
+  // populate year selector
+  const realYear = new Date().getFullYear();
+  const years = [];
+  for (let y = realYear + 1; y >= 2023; y--) years.push(y);
+  $("report-year-select").innerHTML = years.map(y =>
+    `<option value="${y}" ${y===realYear?"selected":""}>${y}</option>`).join("");
+
+  // default: freeform mode, this month prefilled
+  switchReportMode("freeform");
   const now = new Date();
-  const y = STATE.currentYear || now.getFullYear();
-  const isRealYear = y === now.getFullYear();
-  let start, end, label;
-  if (range === "month") {
-    const m = isRealYear ? now.getMonth() : 0;
-    start = new Date(y, m, 1);
-    end = new Date(y, m+1, 0);
-    label = start.toLocaleDateString("he-IL", {month:"long", year:"numeric"});
-  } else if (range === "quarter") {
-    const q = isRealYear ? Math.floor(now.getMonth()/3) : 0;
-    start = new Date(y, q*3, 1);
-    end = new Date(y, q*3+3, 0);
-    label = `רבעון ${q+1}, ${y}`;
-  } else if (range === "half") {
-    const h = isRealYear ? (now.getMonth() < 6 ? 0 : 1) : 0;
-    start = new Date(y, h*6, 1);
-    end = new Date(y, h*6+6, 0);
-    label = h === 0 ? `מחצית ראשונה ${y} (ינואר–יוני)` : `מחצית שנייה ${y} (יולי–דצמבר)`;
-  } else if (range === "year") {
-    start = new Date(y, 0, 1);
-    end = new Date(y, 11, 31);
-    label = `שנת ${y}`;
-  } else { // custom
-    const s = $("custom-start")?.value;
-    const e = $("custom-end")?.value;
-    if (!s || !e) return null;
-    start = new Date(s); end = new Date(e);
-    label = `${s.split("-").reverse().join(".")} — ${e.split("-").reverse().join(".")}`;
-  }
-  return { startISO: start.toISOString().slice(0,10), endISO: end.toISOString().slice(0,10), label };
+  const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
+  const last = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
+  $("custom-start").value = first;
+  $("custom-end").value = last;
+  applyFreeformRange();
 }
 
-function renderReports(range) {
-  if (range === "custom") {
-    $("reports-range-picker").innerHTML = `
-      <div style="display:flex;gap:8px;align-items:end;margin-bottom:10px;">
-        <div style="flex:1;"><label>מתאריך</label><input type="date" id="custom-start"></div>
-        <div style="flex:1;"><label>עד תאריך</label><input type="date" id="custom-end"></div>
-      </div>
-      <button class="btn primary" id="btn-apply-custom" style="margin-bottom:14px;">הצג דוח</button>`;
-    $("btn-apply-custom").addEventListener("click", () => renderReports("custom"));
-    const rd = getRangeDates("custom");
-    if (!rd) { $("rep-range-text").textContent = "בחר טווח תאריכים ולחץ \"הצג דוח\""; return; }
-    return buildReport(rd);
-  }
-  $("reports-range-picker").innerHTML = "";
-  const rd = getRangeDates(range);
-  buildReport(rd);
+$("repmode-freeform").addEventListener("click", () => switchReportMode("freeform"));
+$("repmode-byyear").addEventListener("click", () => switchReportMode("byyear"));
+function switchReportMode(mode) {
+  $("repmode-freeform").classList.toggle("tab-active", mode==="freeform");
+  $("repmode-freeform").classList.toggle("tab-inactive", mode!=="freeform");
+  $("repmode-byyear").classList.toggle("tab-active", mode==="byyear");
+  $("repmode-byyear").classList.toggle("tab-inactive", mode!=="byyear");
+  $("repmode-freeform-panel").classList.toggle("hidden", mode!=="freeform");
+  $("repmode-byyear-panel").classList.toggle("hidden", mode!=="byyear");
 }
+
+$("btn-apply-custom").addEventListener("click", applyFreeformRange);
+function applyFreeformRange() {
+  const s = $("custom-start").value;
+  const e = $("custom-end").value;
+  if (!s || !e) { $("rep-range-text").textContent = "בחר טווח תאריכים ולחץ \"הצג דוח\""; return; }
+  const label = `${s.split("-").reverse().join(".")} — ${e.split("-").reverse().join(".")}`;
+  buildReport({ startISO: s, endISO: e, label });
+}
+
+document.querySelectorAll("[data-period]").forEach(b => b.addEventListener("click", () => {
+  const year = parseInt($("report-year-select").value);
+  const period = b.dataset.period;
+  document.querySelectorAll("[data-period]").forEach(x => x.classList.remove("tab-active"));
+  b.classList.add("tab-active");
+  if (period === "year") {
+    $("report-subperiod-picker").innerHTML = "";
+    buildReport({
+      startISO: `${year}-01-01`, endISO: `${year}-12-31`, label: `שנת ${year}`
+    });
+  } else if (period === "quarter") {
+    $("report-subperiod-picker").innerHTML = [1,2,3,4].map(q =>
+      `<button class="btn" data-q="${q}" style="width:auto;padding:6px 12px;font-size:14px;margin-left:6px;margin-bottom:6px;">רבעון ${q}</button>`).join("");
+    $("report-subperiod-picker").querySelectorAll("[data-q]").forEach(qb => qb.addEventListener("click", () => {
+      $("report-subperiod-picker").querySelectorAll("[data-q]").forEach(x=>x.classList.remove("tab-active"));
+      qb.classList.add("tab-active");
+      const q = parseInt(qb.dataset.q) - 1;
+      const start = new Date(year, q*3, 1), end = new Date(year, q*3+3, 0);
+      buildReport({ startISO: start.toISOString().slice(0,10), endISO: end.toISOString().slice(0,10), label: `רבעון ${q+1}, ${year}` });
+    }));
+  } else if (period === "half") {
+    $("report-subperiod-picker").innerHTML = `
+      <button class="btn" data-h="0" style="width:auto;padding:6px 12px;font-size:14px;margin-left:6px;margin-bottom:6px;">מחצית ראשונה (ינו–יונ)</button>
+      <button class="btn" data-h="1" style="width:auto;padding:6px 12px;font-size:14px;margin-bottom:6px;">מחצית שנייה (יול–דצמ)</button>`;
+    $("report-subperiod-picker").querySelectorAll("[data-h]").forEach(hb => hb.addEventListener("click", () => {
+      $("report-subperiod-picker").querySelectorAll("[data-h]").forEach(x=>x.classList.remove("tab-active"));
+      hb.classList.add("tab-active");
+      const h = parseInt(hb.dataset.h);
+      const start = new Date(year, h*6, 1), end = new Date(year, h*6+6, 0);
+      buildReport({ startISO: start.toISOString().slice(0,10), endISO: end.toISOString().slice(0,10), label: h===0 ? `מחצית ראשונה ${year}` : `מחצית שנייה ${year}` });
+    }));
+  }
+});
 
 function buildReport(rd) {
-  const txs = STATE.transactions.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
+  lastReportRange = rd;
+  const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
   $("rep-range-text").textContent = `טווח: ${rd.label} (${rd.startISO.split("-").reverse().join(".")} – ${rd.endISO.split("-").reverse().join(".")})`;
   const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -523,32 +617,134 @@ function buildReport(rd) {
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("")
     : `<p class="center-note">אין הוצאות בטווח זה</p>`;
 
-  const expenseTxs = txs.filter(t => t.type === "expense").sort((a,b) => b.date.localeCompare(a.date));
+  renderIncomeListForReport(txs.filter(t => t.type === "income").sort((a,b) => b.date.localeCompare(a.date)));
+  renderExpenseListForReport(txs.filter(t => t.type === "expense").sort((a,b) => b.date.localeCompare(a.date)));
+}
+
+function renderIncomeListForReport(incomeTxs) {
+  $("rep-income-list").innerHTML = incomeTxs.length ? incomeTxs.map(t => {
+    const unit = STATE.units.find(u => u.id === t.unitId);
+    return `
+    <div class="card" style="padding:10px 14px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:start;">
+        <div>
+          <p style="font-size:15px;font-weight:600;margin:0;">דירה ${unit ? unit.number : "?"} · ${t.category}</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin:2px 0 0;">${unit ? unit.currentName : ""}${t.advanceNote ? " · " + t.advanceNote : ""}</p>
+        </div>
+        <div style="text-align:left;">
+          <p style="font-size:16px;font-weight:700;margin:0;color:var(--green);">${fmtILS(t.amount)}</p>
+          <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date.split("-").reverse().join(".")} · ${t.method||""}</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;" data-edit-inc="${t.id}"><i class="ti ti-pencil"></i> ערוך</button>
+        <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;color:var(--red);" data-del-inc="${t.id}"><i class="ti ti-trash"></i> מחק</button>
+      </div>
+    </div>`;
+  }).join("") : `<p class="center-note">אין הכנסות בטווח זה</p>`;
+
+  $("rep-income-list").querySelectorAll("[data-edit-inc]").forEach(btn =>
+    btn.addEventListener("click", () => editIncomeTransaction(btn.dataset.editInc)));
+  $("rep-income-list").querySelectorAll("[data-del-inc]").forEach(btn =>
+    btn.addEventListener("click", () => deleteIncomeTransaction(btn.dataset.delInc)));
+}
+
+async function editIncomeTransaction(txId) {
+  const tx = STATE.allTransactionsCache.find(t => t.id === txId);
+  if (!tx) return;
+  const unitOptions = STATE.units.map(u => `${u.id}: דירה ${u.number} (${u.currentName||"ריקה"})`).join("\n");
+  const newUnitId = prompt(`מזהה דירה (הזן רק את המספר):\n${unitOptions}`, tx.unitId);
+  if (newUnitId === null) return;
+  const newCategory = prompt("קטגוריה:", tx.category); if (newCategory === null) return;
+  const newAmountStr = prompt("סכום:", tx.amount); if (newAmountStr === null) return;
+  const newAmount = parseFloat(newAmountStr);
+  if (isNaN(newAmount)) { alert("סכום לא תקין"); return; }
+  const newDate = prompt("תאריך (YYYY-MM-DD):", tx.date); if (newDate === null) return;
+  const patch = { unitId: newUnitId, category: newCategory, amount: newAmount, date: newDate, year: parseInt(newDate.slice(0,4)) };
+  await updateDoc(doc(db, "transactions", txId), patch);
+  Object.assign(tx, patch);
+  const inYearCache = STATE.transactions.find(t => t.id === txId);
+  if (inYearCache) Object.assign(inYearCache, patch);
+  await computeAllTimeBalance();
+  if (lastReportRange) buildReport(lastReportRange);
+  alert("עודכן בהצלחה");
+}
+async function deleteIncomeTransaction(txId) {
+  if (!confirm("למחוק את ההכנסה הזו? הפעולה בלתי הפיכה.")) return;
+  await deleteDoc(doc(db, "transactions", txId));
+  STATE.allTransactionsCache = STATE.allTransactionsCache.filter(t => t.id !== txId);
+  STATE.transactions = STATE.transactions.filter(t => t.id !== txId);
+  await computeAllTimeBalance();
+  if (lastReportRange) buildReport(lastReportRange);
+}
+
+function renderExpenseListForReport(expenseTxs) {
   $("rep-expense-list").innerHTML = expenseTxs.length ? expenseTxs.map(t => `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:start;">
         <div>
-          <p style="font-size:13px;font-weight:600;margin:0;">${t.category}</p>
-          <p style="font-size:11px;color:var(--text-secondary);margin:2px 0 0;">${[t.supplier, t.desc].filter(Boolean).join(" · ") || "—"}</p>
+          <p style="font-size:15px;font-weight:600;margin:0;">${t.category}</p>
+          <p style="font-size:13px;color:var(--text-secondary);margin:2px 0 0;">${[t.supplier, t.desc].filter(Boolean).join(" · ") || "—"}</p>
         </div>
         <div style="text-align:left;">
-          <p style="font-size:14px;font-weight:700;margin:0;">${fmtILS(t.amount)}</p>
-          <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">${t.date.split("-").reverse().join(".")} · ${t.method||""}</p>
+          <p style="font-size:16px;font-weight:700;margin:0;">${fmtILS(t.amount)}</p>
+          <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date.split("-").reverse().join(".")} · ${t.method||""}</p>
         </div>
       </div>
+      ${t.receiptImageUrl ? `<a href="${t.receiptImageUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--blue);margin-top:8px;"><i class="ti ti-photo"></i> צפה בחשבונית</a>` : ""}
+      <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
+        <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;" data-edit-exp="${t.id}"><i class="ti ti-pencil"></i> ערוך</button>
+        <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;color:var(--red);" data-del-exp="${t.id}"><i class="ti ti-trash"></i> מחק</button>
+      </div>
     </div>`).join("") : `<p class="center-note">אין הוצאות בטווח זה</p>`;
+
+  $("rep-expense-list").querySelectorAll("[data-edit-exp]").forEach(btn =>
+    btn.addEventListener("click", () => editExpenseTransaction(btn.dataset.editExp)));
+  $("rep-expense-list").querySelectorAll("[data-del-exp]").forEach(btn =>
+    btn.addEventListener("click", () => deleteExpenseTransaction(btn.dataset.delExp)));
 }
+
+async function editExpenseTransaction(txId) {
+  const tx = STATE.allTransactionsCache.find(t => t.id === txId);
+  if (!tx) return;
+  const newCategory = prompt("קטגוריה:", tx.category); if (newCategory === null) return;
+  const newAmountStr = prompt("סכום:", tx.amount); if (newAmountStr === null) return;
+  const newAmount = parseFloat(newAmountStr);
+  if (isNaN(newAmount)) { alert("סכום לא תקין"); return; }
+  const newSupplier = prompt("ספק / תיאור:", tx.supplier || ""); if (newSupplier === null) return;
+  const newDate = prompt("תאריך (YYYY-MM-DD):", tx.date); if (newDate === null) return;
+  const patch = { category: newCategory, amount: newAmount, supplier: newSupplier, date: newDate, year: parseInt(newDate.slice(0,4)) };
+  await updateDoc(doc(db, "transactions", txId), patch);
+  // update caches
+  Object.assign(tx, patch);
+  const inYearCache = STATE.transactions.find(t => t.id === txId);
+  if (inYearCache) Object.assign(inYearCache, patch);
+  await computeAllTimeBalance();
+  if (lastReportRange) buildReport(lastReportRange);
+  alert("עודכן בהצלחה");
+}
+async function deleteExpenseTransaction(txId) {
+  if (!confirm("למחוק את ההוצאה הזו? הפעולה בלתי הפיכה.")) return;
+  await deleteDoc(doc(db, "transactions", txId));
+  STATE.allTransactionsCache = STATE.allTransactionsCache.filter(t => t.id !== txId);
+  STATE.transactions = STATE.transactions.filter(t => t.id !== txId);
+  await computeAllTimeBalance();
+  if (lastReportRange) buildReport(lastReportRange);
+}
+
 $("btn-export-report").addEventListener("click", () => {
+  const rd = lastReportRange;
+  const txs = rd ? STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO) : STATE.allTransactionsCache;
   const rows = [["סוג","קטגוריה/דירה","סכום","תאריך","אופן תשלום"]];
-  STATE.transactions.forEach(t => rows.push([
-    t.type==="income"?"הכנסה":"הוצאה", t.type==="income"?("דירה "+(STATE.units.find(u=>u.id===t.unitId)||{}).number):t.category,
+  txs.forEach(t => rows.push([
+    t.type==="income"?"הכנסה":"הוצאה", t.type==="income"?("דירה "+((STATE.units.find(u=>u.id===t.unitId)||{}).number||"")):t.category,
     t.amount, t.date, t.method
   ]));
   const csv = rows.map(r => r.join(",")).join("\n");
   const blob = new Blob(["\uFEFF"+csv], {type:"text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `דוח-${STATE.currentYear}.csv`;
+  a.download = `דוח${rd ? "-"+rd.startISO+"_"+rd.endISO : ""}.csv`;
   a.click();
 });
 
@@ -559,17 +755,76 @@ async function renderProjects() {
   $("projects-list").innerHTML = list.length ? list.map(p => `
     <div class="card">
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
-        <p style="font-weight:700;font-size:14px;margin:0;">${p.title}</p>
-        <span class="badge warning">${p.status||"בבחינה"}</span>
+        <p style="font-weight:700;font-size:16px;margin:0;">${p.title}</p>
+        <span class="badge warning" data-status="${p.id}" style="cursor:pointer;">${p.status||"בבחינה"}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-        ${(p.quotes||[]).map(q => `
-          <div style="background:var(--surface-2);border-radius:8px;padding:10px;">
-            <p style="font-size:12px;font-weight:700;margin:0 0 6px;">${q.name}</p>
-            <p style="font-size:14px;font-weight:700;margin:0;">${fmtILS(q.total)}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+        ${(p.quotes||[]).map((q,i) => `
+          <div style="background:var(--surface-2);border-radius:8px;padding:10px;position:relative;">
+            <p style="font-size:14px;font-weight:700;margin:0 0 6px;">${q.name}</p>
+            ${(q.items||[]).length ? `
+              <div style="margin-bottom:6px;">
+                ${q.items.map(it => `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);padding:2px 0;"><span>${it.desc}</span><span>${fmtILS(it.price)}</span></div>`).join("")}
+              </div>` : ""}
+            <p style="font-size:16px;font-weight:700;margin:0 0 6px;border-top:${(q.items||[]).length ? "1px solid var(--border-strong);padding-top:4px;" : "none;"}">${fmtILS(q.total)}</p>
+            <button data-del-quote="${p.id}|${i}" style="width:auto;padding:2px 8px;font-size:12px;color:var(--red);border:none;background:none;">מחק</button>
           </div>`).join("")}
       </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn ghost" data-add-quote="${p.id}" style="width:auto;padding:6px 12px;font-size:13px;">+ הצעת מחיר</button>
+        <button class="btn ghost" data-del-project="${p.id}" style="width:auto;padding:6px 12px;font-size:13px;color:var(--red);">מחק פרויקט</button>
+      </div>
     </div>`).join("") : `<p class="center-note">אין פרויקטים עדיין</p>`;
+
+  $("projects-list").querySelectorAll("[data-add-quote]").forEach(btn =>
+    btn.addEventListener("click", () => addQuoteToProject(btn.dataset.addQuote, list)));
+  $("projects-list").querySelectorAll("[data-del-quote]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const [projectId, idx] = btn.dataset.delQuote.split("|");
+      deleteQuoteFromProject(projectId, parseInt(idx), list);
+    }));
+  $("projects-list").querySelectorAll("[data-del-project]").forEach(btn =>
+    btn.addEventListener("click", async () => {
+      if (!confirm("למחוק את הפרויקט הזה לגמרי?")) return;
+      await deleteDoc(doc(db, "projects", btn.dataset.delProject));
+      renderProjects();
+    }));
+  $("projects-list").querySelectorAll("[data-status]").forEach(el =>
+    el.addEventListener("click", async () => {
+      const opts = ["בבחינה", "אושר", "בביצוע", "הושלם", "נדחה"];
+      const current = opts.indexOf(el.textContent.trim());
+      const next = opts[(current + 1) % opts.length];
+      await updateDoc(doc(db, "projects", el.dataset.status), { status: next });
+      renderProjects();
+    }));
+}
+async function addQuoteToProject(projectId, list) {
+  const name = prompt('שם ההצעה (למשל "הצעה 1" או שם הקבלן):');
+  if (!name) return;
+  const itemsRaw = prompt('פריטים בפורמט "תיאור=מחיר", מופרדים בפסיק (למשל: צבע=12000, דלת=2500). אפשר להשאיר ריק ולהזין רק סה"כ.');
+  const items = [];
+  let total = 0;
+  if (itemsRaw) {
+    itemsRaw.split(",").forEach(part => {
+      const [desc, price] = part.split("=").map(s => s.trim());
+      const p = parseFloat(price);
+      if (desc && !isNaN(p)) { items.push({ desc, price: p }); total += p; }
+    });
+  }
+  if (!items.length) {
+    const totalStr = prompt('סה"כ להצעה (₪):', "0");
+    total = parseFloat(totalStr) || 0;
+  }
+  const project = list.find(p => p.id === projectId);
+  const quotes = [...(project.quotes || []), { name, items, total }];
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
+}
+async function deleteQuoteFromProject(projectId, idx, list) {
+  const project = list.find(p => p.id === projectId);
+  const quotes = (project.quotes || []).filter((_, i) => i !== idx);
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
 }
 $("btn-new-project").addEventListener("click", async () => {
   const title = prompt("שם הפרויקט:");
@@ -595,10 +850,10 @@ function renderSettings() {
   $("settings-units-list").innerHTML = STATE.units.map(u => `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <p style="font-weight:700;font-size:13px;margin:0;">דירה ${u.number}</p>
-        <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:11px;" data-edit="${u.id}">ערוך</button>
+        <p style="font-weight:700;font-size:15px;margin:0;">דירה ${u.number}</p>
+        <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;" data-edit="${u.id}">ערוך</button>
       </div>
-      <p style="font-size:12px;color:var(--text-secondary);margin:4px 0 0;">${u.currentName || "ריקה"} ${u.currentPhone ? "· "+u.currentPhone : ""}</p>
+      <p style="font-size:14px;color:var(--text-secondary);margin:4px 0 0;">${u.currentName || "ריקה"} ${u.currentPhone ? "· "+u.currentPhone : ""}</p>
     </div>`).join("");
   $("settings-units-list").querySelectorAll("[data-edit]").forEach(btn => {
     btn.addEventListener("click", () => editUnit(btn.dataset.edit));
@@ -708,6 +963,25 @@ $("btn-import-history").addEventListener("click", async () => {
 });
 
 // ---------- Public view ----------
+const chartInstances = {};
+function renderExpenseChart(canvasId, legendId, expenseTxs) {
+  const byCat = {};
+  expenseTxs.forEach(t => byCat[t.category] = (byCat[t.category]||0) + (t.amount||0));
+  const labels = Object.keys(byCat), data = Object.values(byCat);
+  const colors = ["#2a78d6","#1baf7a","#eda100","#e34948","#4a3aa7","#e87ba4","#eb6834"];
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+  if (labels.length) {
+    chartInstances[canvasId] = new Chart($(canvasId), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+  }
+  $(legendId).innerHTML = labels.length ? labels.map((l,i) => `
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("")
+    : `<p class="center-note">אין הוצאות בשנה זו</p>`;
+}
+
 async function renderPublicView() {
   await loadSettings();
   await loadUnits();
@@ -732,6 +1006,7 @@ async function renderPublicView() {
   $("pub-bar-expense").style.width = (expense/total*100)+"%";
   $("pub-income-txt").textContent = "הכנסות " + fmtILS(income);
   $("pub-expense-txt").textContent = "הוצאות " + fmtILS(expense);
+  renderExpenseChart("pub-chart", "pub-legend", txs.filter(t => t.type === "expense"));
 }
 
 // ---------- Resident view ----------
@@ -740,15 +1015,23 @@ function renderResidentView() {
   const st = unitStatus(unit);
   $("res-unit-num").textContent = unit.number;
   $("res-balance").textContent = fmtILS(st.debt);
-  const txs = STATE.transactions.filter(t => t.unitId === unit.id).sort((a,b)=>b.date.localeCompare(a.date));
-  $("res-transactions").innerHTML = txs.length ? txs.map(t => `
+  const myTxs = STATE.transactions.filter(t => t.unitId === unit.id).sort((a,b)=>b.date.localeCompare(a.date));
+  $("res-transactions").innerHTML = myTxs.length ? myTxs.map(t => `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;">
-        <span style="font-size:13px;">${t.category}</span>
-        <span style="font-size:13px;font-weight:700;">${fmtILS(t.amount)}</span>
+        <span style="font-size:15px;">${t.category}</span>
+        <span style="font-size:15px;font-weight:700;">${fmtILS(t.amount)}</span>
       </div>
-      <p style="font-size:11px;color:var(--text-muted);margin:2px 0 0;">${t.date}</p>
+      <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date}</p>
     </div>`).join("") : `<p class="center-note">אין תשלומים רשומים עדיין</p>`;
+
+  // Building-wide status report (income/expenses/balance/chart) — no receipts, no other units' personal info
+  const income = STATE.transactions.filter(t=>t.type==="income").reduce((s,t)=>s+(t.amount||0),0);
+  const expense = STATE.transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+(t.amount||0),0);
+  $("res-b-income").textContent = fmtILS(income);
+  $("res-b-expense").textContent = fmtILS(expense);
+  $("res-b-balance").textContent = fmtILS(STATE.allTimeBalance);
+  renderExpenseChart("res-chart", "res-legend", STATE.transactions.filter(t => t.type === "expense"));
 }
 
 // wire dashboard shortcut buttons

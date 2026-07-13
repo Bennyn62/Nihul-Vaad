@@ -50,6 +50,28 @@ service cloud.firestore {
 בית של 12 דיירים זה סביר, אבל זה לא רמת אבטחה בנקאית — אם בעתיד תרצה הקשחה
 נוספת (למשל דרך Cloud Functions), אפשר לשדרג.
 
+## 2.1 הפעלת Firebase Storage (לתמונות חשבוניות)
+
+1. בתפריט הצד ב-Firebase Console → **Storage** → "Get started" → בחר מיקום (כדאי אותו מיקום כמו Firestore) → Done.
+2. לשונית **Rules** ב-Storage → הדבק:
+
+```
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /receipts/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+    }
+  }
+}
+```
+
+זה מאפשר לכל אחד לצפות בתמונות חשבוניות (כמו הקריאה הפתוחה ב-Firestore),
+אבל להעלות תמונות חדשות רק לך, ומגביל לקבצי תמונה עד 10MB.
+
 ## 3. פריסה ל-GitHub Pages
 
 זהה בדיוק לתהליך שעשית עם eWay:
