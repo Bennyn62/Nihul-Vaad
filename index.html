@@ -924,7 +924,7 @@ document.querySelectorAll("[data-period]").forEach(b => b.addEventListener("clic
       buildReport({ startISO: start.toISOString().slice(0,10), endISO: end.toISOString().slice(0,10), label: h===0 ? `מחצית ראשונה ${year}` : `מחצית שנייה ${year}` });
     }));
   }
-});
+}));
 
 function buildReport(rd) {
   lastReportRange = rd;
