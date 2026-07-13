@@ -164,10 +164,23 @@ $("tab-resident-login").addEventListener("click", () => {
   ).join("");
 });
 $("btn-admin-login").addEventListener("click", async () => {
+  const btn = $("btn-admin-login");
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = "מתחבר...";
   try {
-    await signInWithEmailAndPassword(auth, $("admin-email").value, $("admin-pass").value);
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("הבקשה נתקעה יותר מ-10 שניות - כנראה יש חסימת רשת לשרתי googleapis.com")), 10000)
+    );
+    await Promise.race([
+      signInWithEmailAndPassword(auth, $("admin-email").value, $("admin-pass").value),
+      timeout
+    ]);
   } catch (e) {
     alert("שגיאת התחברות: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
   }
 });
 $("btn-resident-login").addEventListener("click", () => {

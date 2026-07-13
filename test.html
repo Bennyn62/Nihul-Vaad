@@ -37,7 +37,12 @@
   </div>
 
   <div class="box">
-    <p>שלב 4 - שגיאות שנתפסו:</p>
+    <p>שלב 4 - חיבור בפועל לשרתי googleapis.com (זה מה שבאמת עושה כניסה/שמירת נתונים):</p>
+    <p id="step4b">⏳ בודק (עד 8 שניות)...</p>
+  </div>
+
+  <div class="box">
+    <p>שלב 5 - שגיאות שנתפסו:</p>
     <p id="step4">אין שגיאות עדיין</p>
   </div>
 
@@ -52,6 +57,18 @@
   window.addEventListener('unhandledrejection', function(e) {
     document.getElementById('step4').innerHTML += '<br><span class="fail">שגיאת רשת/הבטחה: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</span>';
   });
+
+  const timeoutFetch = (url, ms) => Promise.race([
+    fetch(url, { mode: 'no-cors' }),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('נתקע (timeout) אחרי ' + (ms/1000) + ' שניות')), ms))
+  ]);
+  timeoutFetch('https://firestore.googleapis.com/', 8000)
+    .then(() => {
+      document.getElementById('step4b').innerHTML = '<span class="ok">✅ googleapis.com נגיש</span>';
+    })
+    .catch((err) => {
+      document.getElementById('step4b').innerHTML = '<span class="fail">❌ googleapis.com לא נגיש: ' + err.message + '</span>';
+    });
 </script>
 
 <script type="module">
