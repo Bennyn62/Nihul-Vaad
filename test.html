@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>בדיקת אבחון</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; font-size: 18px; line-height: 1.8; }
+  .ok { color: green; font-weight: bold; }
+  .fail { color: red; font-weight: bold; }
+  .box { border: 1px solid #ccc; border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  button { font-size: 18px; padding: 10px 20px; }
+</style>
+</head>
+<body>
+  <h2>בדיקת אבחון</h2>
+
+  <div class="box">
+    <p>שלב 1 - JavaScript בסיסי:</p>
+    <p id="step1">⏳ בודק...</p>
+  </div>
+
+  <div class="box">
+    <p>שלב 2 - לחיצה על כפתור:</p>
+    <button id="testBtn">לחץ כאן</button>
+    <p id="step2">עדיין לא נלחץ</p>
+  </div>
+
+  <div class="box">
+    <p>שלב 3 - טעינת Firebase מהאינטרנט:</p>
+    <p id="step3">⏳ בודק...</p>
+  </div>
+
+  <div class="box">
+    <p>שלב 4 - שגיאות שנתפסו:</p>
+    <p id="step4">אין שגיאות עדיין</p>
+  </div>
+
+<script>
+  document.getElementById('step1').innerHTML = '<span class="ok">✅ עובד</span>';
+  document.getElementById('testBtn').addEventListener('click', function() {
+    document.getElementById('step2').innerHTML = '<span class="ok">✅ הכפתור הגיב ללחיצה</span>';
+  });
+  window.addEventListener('error', function(e) {
+    document.getElementById('step4').innerHTML += '<br><span class="fail">שגיאה: ' + e.message + ' (בקובץ: ' + e.filename + ')</span>';
+  });
+  window.addEventListener('unhandledrejection', function(e) {
+    document.getElementById('step4').innerHTML += '<br><span class="fail">שגיאת רשת/הבטחה: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</span>';
+  });
+</script>
+
+<script type="module">
+  try {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    document.getElementById('step3').innerHTML = '<span class="ok">✅ Firebase נטען בהצלחה מהאינטרנט</span>';
+  } catch (err) {
+    document.getElementById('step3').innerHTML = '<span class="fail">❌ Firebase נכשל בטעינה: ' + err.message + '</span>';
+  }
+</script>
+
+</body>
+</html>
