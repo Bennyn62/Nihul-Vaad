@@ -341,7 +341,8 @@
 import { firebaseConfig, BUILDING_ID, TOTAL_UNITS } from './firebase-config.js';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
-  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+  setPersistence, inMemoryPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
@@ -352,6 +353,8 @@ import { historicalData } from "./historicalData.js";
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
+setPersistence(auth, inMemoryPersistence).catch(() => {});
+let userExplicitlyChosePublic = false;
 
 const HEB_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 const todayISO = () => new Date().toISOString().slice(0,10);
@@ -545,11 +548,13 @@ $("btn-resident-logout").addEventListener("click", () => $("btn-logout").click()
 $("btn-resident-back").addEventListener("click", () => $("btn-logout").click());
 $("btn-ud-back").addEventListener("click", () => showView("view-units"));
 $("btn-show-public").addEventListener("click", () => {
+  userExplicitlyChosePublic = true;
   $("view-entry").classList.add("hidden");
   renderPublicView();
   $("view-public").classList.remove("hidden");
 });
 $("btn-back-entry").addEventListener("click", () => {
+  userExplicitlyChosePublic = false;
   $("view-public").classList.add("hidden");
   $("view-entry").classList.remove("hidden");
 });
@@ -557,7 +562,7 @@ $("btn-back-entry").addEventListener("click", () => {
 onAuthStateChanged(auth, async (user) => {
   await loadSettings();
   await loadUnits();
-  if (user) {
+  if (user && !userExplicitlyChosePublic) {
     STATE.role = "admin";
     await enterApp();
   } else if (STATE.role !== "resident") {
