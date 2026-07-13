@@ -1,12 +1,12 @@
 import { firebaseConfig, BUILDING_ID, TOTAL_UNITS } from './firebase-config.js';
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeApp } from "https://esm.sh/firebase@10.12.2/app";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+} from "https://esm.sh/firebase@10.12.2/auth";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
   updateDoc, deleteDoc, query, where, orderBy, writeBatch
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://esm.sh/firebase@10.12.2/firestore";
 import { historicalData } from "./historicalData.js";
 
 const fbApp = initializeApp(firebaseConfig);
