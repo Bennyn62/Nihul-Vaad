@@ -335,14 +335,14 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script type="module">
 import { firebaseConfig, BUILDING_ID, TOTAL_UNITS } from './firebase-config.js';
-import { initializeApp } from "https://esm.sh/firebase@10.12.2/app";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged
-} from "https://esm.sh/firebase@10.12.2/auth";
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
   updateDoc, deleteDoc, query, where, orderBy, writeBatch
-} from "https://esm.sh/firebase@10.12.2/firestore";
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { historicalData } from "./historicalData.js";
 
 if (document.getElementById('error-banner')) {
