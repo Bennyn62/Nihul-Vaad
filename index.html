@@ -232,8 +232,8 @@
 
       <p style="font-size:14px;color:var(--text-secondary);margin:14px 0;" id="rep-range-text"></p>
       <div class="metric-grid cols-3">
-        <div class="metric"><p class="label">הכנסות</p><p class="value pos" id="rep-income">-</p></div>
-        <div class="metric"><p class="label">הוצאות</p><p class="value neg" id="rep-expense">-</p></div>
+        <div class="metric" id="rep-income-card" style="cursor:pointer;"><p class="label">הכנסות <i class="ti ti-chevron-down" style="font-size:12px;"></i></p><p class="value pos" id="rep-income">-</p></div>
+        <div class="metric" id="rep-expense-card" style="cursor:pointer;"><p class="label">הוצאות <i class="ti ti-chevron-down" style="font-size:12px;"></i></p><p class="value neg" id="rep-expense">-</p></div>
         <div class="metric"><p class="label">מאזן</p><p class="value" id="rep-balance">-</p></div>
       </div>
       <p style="font-weight:700;font-size:16px;margin:0 0 10px;">פילוח הוצאות לפי קטגוריה</p>
@@ -241,13 +241,22 @@
         <canvas id="rep-chart" role="img" aria-label="פילוח הוצאות לפי קטגוריה"></canvas>
       </div>
       <div id="rep-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;font-size:14px;color:var(--text-secondary);"></div>
-      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">רשימה מפורטת של הכנסות</p>
-      <div id="rep-income-list"></div>
 
-      <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">רשימה מפורטת של הוצאות</p>
-      <div id="rep-expense-list"></div>
-      <button class="btn" id="btn-export-report" style="margin-top:14px;"><i class="ti ti-download"></i> ייצוא דוח (CSV)</button>
+      <div id="rep-income-list-wrap" class="hidden">
+        <p style="font-weight:700;font-size:16px;margin:0 0 10px;">רשימה מפורטת של הכנסות</p>
+        <div id="rep-income-list"></div>
+      </div>
+
+      <div id="rep-expense-list-wrap" class="hidden">
+        <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">רשימה מפורטת של הוצאות</p>
+        <div id="rep-expense-list"></div>
+      </div>
+
+      <button class="btn" id="btn-export-report" style="margin-top:14px;"><i class="ti ti-file-download"></i> הפקת דוח PDF לדיירים</button>
     </section>
+
+    <!-- Hidden printable report, shown only via print media query -->
+    <div id="print-report"></div>
 
     <!-- ========== פרויקטים / הצעות מחיר ========== -->
     <section id="view-projects" class="hidden">
@@ -931,8 +940,19 @@ document.querySelectorAll("[data-period]").forEach(b => b.addEventListener("clic
   }
 }));
 
+$("rep-income-card").addEventListener("click", () => {
+  $("rep-income-list-wrap").classList.toggle("hidden");
+  $("rep-income-list-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+$("rep-expense-card").addEventListener("click", () => {
+  $("rep-expense-list-wrap").classList.toggle("hidden");
+  $("rep-expense-list-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
 function buildReport(rd) {
   lastReportRange = rd;
+  $("rep-income-list-wrap").classList.add("hidden");
+  $("rep-expense-list-wrap").classList.add("hidden");
   const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
   $("rep-range-text").textContent = `טווח: ${rd.label} (${rd.startISO.split("-").reverse().join(".")} - ${rd.endISO.split("-").reverse().join(".")})`;
   const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
@@ -1075,20 +1095,60 @@ async function deleteExpenseTransaction(txId) {
 }
 
 $("btn-export-report").addEventListener("click", () => {
-  const rd = lastReportRange;
-  const txs = rd ? STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO) : STATE.allTransactionsCache;
-  const rows = [["סוג","קטגוריה/דירה","סכום","תאריך","אופן תשלום"]];
-  txs.forEach(t => rows.push([
-    t.type==="income"?"הכנסה":"הוצאה", t.type==="income"?("דירה "+((STATE.units.find(u=>u.id===t.unitId)||{}).number||"")):t.category,
-    t.amount, t.date, t.method
-  ]));
-  const csv = rows.map(r => r.join(",")).join("\n");
-  const blob = new Blob(["\uFEFF"+csv], {type:"text/csv"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `דוח${rd ? "-"+rd.startISO+"_"+rd.endISO : ""}.csv`;
-  a.click();
+  if (!lastReportRange) { alert("יש להציג דוח קודם"); return; }
+  generatePrintReport(lastReportRange);
+  setTimeout(() => window.print(), 200);
 });
+
+function generatePrintReport(rd) {
+  const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
+  const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
+  const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+
+  const before = STATE.allTransactionsCache.filter(t => t.date < rd.startISO);
+  const openingBalance = before.reduce((s,t) => s + (t.type==="income" ? t.amount : -t.amount), 0);
+  const closingBalance = openingBalance + income - expense;
+
+  const expenseTxs = txs.filter(t => t.type === "expense").sort((a,b) => a.date.localeCompare(b.date));
+
+  let chartImg = "";
+  const canvas = $("rep-chart");
+  if (canvas && repChart) {
+    try { chartImg = canvas.toDataURL("image/png"); } catch(e) {}
+  }
+
+  const today = todayISO().split("-").reverse().join(".");
+
+  $("print-report").innerHTML = `
+    <h1>${STATE.settings.name || "ועד בית"}</h1>
+    <h2>${STATE.settings.address || ""}</h2>
+    <p class="pr-period">דוח כספי תקופתי &nbsp;|&nbsp; לתקופה: ${rd.startISO.split("-").reverse().join(".")} - ${rd.endISO.split("-").reverse().join(".")} &nbsp;|&nbsp; הופק בתאריך: ${today}</p>
+    <table class="pr-summary">
+      <tr><td class="label">יתרת פתיחה</td><td class="val">${fmtILS(openingBalance)}</td></tr>
+      <tr><td class="label">סך הכנסות בתקופה</td><td class="val">${fmtILS(income)}</td></tr>
+      <tr><td class="label">סך הוצאות בתקופה</td><td class="val">${fmtILS(expense)}</td></tr>
+      <tr><td class="label">יתרת סגירה</td><td class="val">${fmtILS(closingBalance)}</td></tr>
+    </table>
+    ${chartImg ? `<p style="font-weight:700;margin-bottom:8px;">התפלגות הוצאות לפי קטגוריה</p><img class="pr-chart-img" src="${chartImg}">` : ""}
+    <p style="font-weight:700;margin-bottom:8px;">פירוט הוצאות</p>
+    <table class="pr-expenses">
+      <thead><tr><th>תאריך</th><th>קטגוריה</th><th>ספק / תיאור</th><th>סכום</th></tr></thead>
+      <tbody>
+        ${expenseTxs.length ? expenseTxs.map(t => `
+          <tr>
+            <td>${t.date.split("-").reverse().join(".")}</td>
+            <td>${t.category}</td>
+            <td>${[t.supplier, t.desc].filter(Boolean).join(" - ") || "-"}</td>
+            <td>${fmtILS(t.amount)}</td>
+          </tr>`).join("") : `<tr><td colspan="4">אין הוצאות בתקופה זו</td></tr>`}
+      </tbody>
+    </table>
+    <div class="pr-sign">
+      בברכה,<br>
+      צוות הוועד: בני ארגאו
+    </div>
+  `;
+}
 
 // ---------- Projects ----------
 async function renderProjects() {

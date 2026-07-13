@@ -169,3 +169,26 @@ nav.tabbar button.active{color:var(--blue);background:var(--blue-bg);}
 
 .hidden{display:none !important;}
 .center-note{text-align:center;font-size:14px;color:var(--text-muted);padding:20px 0;}
+
+/* Printable report - hidden on screen, shown only when printing */
+#print-report{display:none;}
+@media print{
+  body *{visibility:hidden;}
+  #print-report, #print-report *{visibility:visible;}
+  #print-report{
+    display:block;position:absolute;top:0;left:0;width:100%;
+    padding:24px;font-family:"Assistant","Segoe UI",Arial,sans-serif;direction:rtl;color:#000;background:#fff;
+  }
+  #print-report h1{font-size:22px;margin:0 0 4px;}
+  #print-report h2{font-size:15px;font-weight:400;color:#444;margin:0 0 18px;}
+  #print-report .pr-period{font-size:14px;font-weight:600;margin-bottom:18px;border-bottom:1px solid #ccc;padding-bottom:10px;}
+  #print-report table.pr-summary{width:100%;border-collapse:collapse;margin-bottom:20px;}
+  #print-report table.pr-summary td{padding:8px;border:1px solid #ccc;font-size:14px;}
+  #print-report table.pr-summary td.label{color:#555;width:50%;}
+  #print-report table.pr-summary td.val{font-weight:700;text-align:left;}
+  #print-report .pr-chart-img{max-width:320px;display:block;margin:0 auto 20px;}
+  #print-report table.pr-expenses{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:13px;}
+  #print-report table.pr-expenses th{text-align:right;border-bottom:2px solid #333;padding:6px 4px;}
+  #print-report table.pr-expenses td{padding:6px 4px;border-bottom:1px solid #ddd;}
+  #print-report .pr-sign{margin-top:40px;font-size:14px;line-height:1.8;}
+}
