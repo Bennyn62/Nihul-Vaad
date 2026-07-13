@@ -7,15 +7,11 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
   updateDoc, deleteDoc, query, where, orderBy, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {
-  getStorage, ref as storageRef, uploadBytes, getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 import { historicalData } from "./historicalData.js";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
-const storage = getStorage(fbApp);
 
 const HEB_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 const todayISO = () => new Date().toISOString().slice(0,10);
@@ -417,49 +413,19 @@ $("btn-save-income").addEventListener("click", async () => {
 // ---------- Add expense ----------
 function renderAddExpense() {
   $("exp-date-display").textContent = "היום · " + todayISO().split("-").reverse().join(".");
-  $("exp-photo").value = "";
-  $("exp-photo-preview").innerHTML = "";
-  $("exp-photo").onchange = () => {
-    const file = $("exp-photo").files[0];
-    if (!file) { $("exp-photo-preview").innerHTML = ""; return; }
-    const url = URL.createObjectURL(file);
-    $("exp-photo-preview").innerHTML = `<img src="${url}" style="max-width:140px;max-height:140px;border-radius:8px;border:1px solid var(--border);">`;
-  };
 }
 $("btn-save-expense").addEventListener("click", async () => {
   const amount = parseFloat($("exp-amount").value || "0");
   if (!amount) { alert("נא להזין סכום"); return; }
-  const btn = $("btn-save-expense");
-  btn.disabled = true;
-  const originalLabel = btn.textContent;
   const tx = {
     type: "expense", category: $("exp-category").value, amount,
     method: $("exp-method").value, supplier: $("exp-supplier").value,
     desc: $("exp-desc").value, date: todayISO(),
     year: STATE.currentYear, createdAt: Date.now()
   };
-  try {
-    const txId = await saveTransaction(tx);
-    const file = $("exp-photo").files[0];
-    if (file) {
-      btn.textContent = "מעלה תמונה...";
-      const path = `receipts/${txId}_${file.name.replace(/[^a-zA-Z0-9._-]/g,"")}`;
-      const fileRef = storageRef(storage, path);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-      await updateDoc(doc(db, "transactions", txId), { receiptImageUrl: url });
-      tx.receiptImageUrl = url;
-      const cached = STATE.allTransactionsCache.find(t => t.id === txId);
-      if (cached) cached.receiptImageUrl = url;
-    }
-    alert("ההוצאה נשמרה" + (file ? " עם התמונה" : ""));
-    showView("view-dashboard");
-  } catch (e) {
-    alert("שגיאה בשמירה: " + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = originalLabel;
-  }
+  await saveTransaction(tx);
+  alert("ההוצאה נשמרה");
+  showView("view-dashboard");
 });
 
 // ---------- Receipt ----------
@@ -691,7 +657,6 @@ function renderExpenseListForReport(expenseTxs) {
           <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date.split("-").reverse().join(".")} · ${t.method||""}</p>
         </div>
       </div>
-      ${t.receiptImageUrl ? `<a href="${t.receiptImageUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--blue);margin-top:8px;"><i class="ti ti-photo"></i> צפה בחשבונית</a>` : ""}
       <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
         <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;" data-edit-exp="${t.id}"><i class="ti ti-pencil"></i> ערוך</button>
         <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;color:var(--red);" data-del-exp="${t.id}"><i class="ti ti-trash"></i> מחק</button>
