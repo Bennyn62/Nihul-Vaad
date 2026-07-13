@@ -7,7 +7,7 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
   updateDoc, deleteDoc, query, where, orderBy, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { historicalData } from "./historicalData.js";
+import { historicalData } from "./historicalData.js?v=2";
 
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
