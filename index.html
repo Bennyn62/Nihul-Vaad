@@ -949,6 +949,7 @@ document.querySelectorAll("[data-period]").forEach(b => b.addEventListener("clic
 }));
 
 $("rep-income-card").addEventListener("click", () => {
+  alert("DEBUG: הלחיצה על הכנסות נקלטה!");
   $("rep-income-list-wrap").classList.toggle("hidden");
   $("rep-income-list-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
 });
