@@ -91,8 +91,8 @@
       </div>
       <div class="metric-grid cols-3">
         <div class="metric"><p class="label">יתרת קופה (מצטבר)</p><p class="value" id="d-balance">-</p></div>
-        <div class="metric"><p class="label">הכנסות השנה</p><p class="value pos" id="d-income">-</p></div>
-        <div class="metric"><p class="label">הוצאות השנה</p><p class="value neg" id="d-expense">-</p></div>
+        <div class="metric" id="d-income-card" style="cursor:pointer;"><p class="label">הכנסות השנה <i class="ti ti-chevron-left" style="font-size:12px;"></i></p><p class="value pos" id="d-income">-</p></div>
+        <div class="metric" id="d-expense-card" style="cursor:pointer;"><p class="label">הוצאות השנה <i class="ti ti-chevron-left" style="font-size:12px;"></i></p><p class="value neg" id="d-expense">-</p></div>
       </div>
       <div class="btn-row">
         <button class="btn success" id="btn-goto-add-income"><i class="ti ti-plus"></i> הכנסה חדשה</button>
@@ -949,7 +949,6 @@ document.querySelectorAll("[data-period]").forEach(b => b.addEventListener("clic
 }));
 
 $("rep-income-card").addEventListener("click", () => {
-  alert("DEBUG: הלחיצה על הכנסות נקלטה!");
   $("rep-income-list-wrap").classList.toggle("hidden");
   $("rep-income-list-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
 });
@@ -1450,6 +1449,19 @@ function renderResidentView() {
 // wire dashboard shortcut buttons
 $("btn-goto-add-income").addEventListener("click", () => showView("view-add-income"));
 $("btn-goto-add-expense").addEventListener("click", () => showView("view-add-expense"));
+
+function goToReportWithList(type) {
+  showView("view-reports");
+  switchReportMode("byyear");
+  $("report-year-select").value = String(STATE.currentYear);
+  const yearBtn = document.querySelector('[data-period="year"]');
+  if (yearBtn) yearBtn.click();
+  const wrapId = type === "income" ? "rep-income-list-wrap" : "rep-expense-list-wrap";
+  $(wrapId).classList.remove("hidden");
+  setTimeout(() => $(wrapId).scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+}
+$("d-income-card").addEventListener("click", () => goToReportWithList("income"));
+$("d-expense-card").addEventListener("click", () => goToReportWithList("expense"));
 
 </script>
 <!-- historicalData.js is imported directly inside app.js as an ES module -->
