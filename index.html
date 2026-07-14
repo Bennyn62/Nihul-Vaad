@@ -353,7 +353,7 @@ import { historicalData } from "./historicalData.js";
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
-setPersistence(auth, inMemoryPersistence).catch(() => {});
+try { setPersistence(auth, inMemoryPersistence).catch(() => {}); } catch (e) { console.warn("setPersistence failed", e); }
 let userExplicitlyChosePublic = false;
 
 const HEB_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
