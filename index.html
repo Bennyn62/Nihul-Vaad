@@ -292,6 +292,13 @@
         <p id="import-done-note" class="hidden" style="font-size:14px;color:var(--text-success);margin:10px 0 0;"><i class="ti ti-check"></i> הייבוא בוצע בעבר.</p>
       </div>
 
+      <div class="card" id="dup-check-card">
+        <p style="font-weight:700;font-size:16px;margin:0 0 8px;">בדיקת כפילויות בתנועות</p>
+        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;">אם החוב שמוצג נראה גבוה מדי, ייתכן שהייבוא ההיסטורי רץ פעמיים בטעות ויצר תנועות כפולות. הכלי הזה יבדוק ויציג ממצאים לפני שמוחקים משהו.</p>
+        <button class="btn" id="btn-check-duplicates">בדוק כפילויות</button>
+        <div id="dup-results" style="margin-top:14px;"></div>
+      </div>
+
       <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">ניהול דירות ודיירים</p>
       <div id="settings-units-list"></div>
       <button class="btn" id="btn-add-unit"><i class="ti ti-plus"></i> הוסף דירה חדשה</button>
@@ -1371,6 +1378,58 @@ $("btn-import-history").addEventListener("click", async () => {
     $("btn-import-history").disabled = false;
     renderImportCard();
   }
+});
+
+// ---------- Duplicate transaction checker ----------
+$("btn-check-duplicates").addEventListener("click", async () => {
+  $("dup-results").innerHTML = `<p class="center-note">בודק...</p>`;
+  await computeAllTimeBalance(); // refresh full cache first
+  const groups = {};
+  STATE.allTransactionsCache.forEach(t => {
+    const key = [t.type, t.unitId||"", t.category||"", t.amount, t.date, (t.months||[]).join(",")].join("|");
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+  const dupGroups = Object.values(groups).filter(g => g.length > 1);
+  if (!dupGroups.length) {
+    $("dup-results").innerHTML = `<p style="color:var(--green);font-size:14px;"><i class="ti ti-check"></i> לא נמצאו כפילויות - כל התנועות תקינות.</p>`;
+    return;
+  }
+  let totalExcessCount = 0, totalExcessAmount = 0;
+  dupGroups.forEach(g => { totalExcessCount += g.length - 1; totalExcessAmount += g[0].amount * (g.length - 1); });
+
+  $("dup-results").innerHTML = `
+    <p style="color:var(--red);font-size:14px;font-weight:700;margin-bottom:10px;">
+      נמצאו ${dupGroups.length} קבוצות עם כפילות - סה"כ ${totalExcessCount} תנועות מיותרות (${fmtILS(totalExcessAmount)})
+    </p>
+    <div id="dup-list"></div>
+    <button class="btn danger" id="btn-remove-duplicates" style="margin-top:10px;">מחק את כל הכפילויות (משאיר עותק אחד מכל קבוצה)</button>`;
+
+  $("dup-list").innerHTML = dupGroups.map(g => {
+    const t = g[0];
+    const unit = t.unitId ? (STATE.units.find(u=>u.id===t.unitId)||{}).number : null;
+    return `<div class="card" style="padding:10px 14px;margin-bottom:6px;">
+      <p style="font-size:14px;margin:0;">${t.type==="income"?"הכנסה":"הוצאה"}${unit?" - דירה "+unit:""} - ${t.category} - ${fmtILS(t.amount)} - ${t.date}</p>
+      <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">מופיע ${g.length} פעמים במסד הנתונים</p>
+    </div>`;
+  }).join("");
+
+  $("btn-remove-duplicates").addEventListener("click", async () => {
+    if (!confirm(`למחוק ${totalExcessCount} תנועות כפולות (משאיר עותק אחד מכל קבוצה, לפי הראשונה שנוצרה)? הפעולה בלתי הפיכה.`)) return;
+    const btn = $("btn-remove-duplicates");
+    btn.disabled = true;
+    btn.textContent = "מוחק...";
+    for (const g of dupGroups) {
+      const sorted = [...g].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+      for (let i = 1; i < sorted.length; i++) {
+        await deleteDoc(doc(db, "transactions", sorted[i].id));
+      }
+    }
+    await computeAllTimeBalance();
+    if (STATE.currentYear) await loadTransactions(STATE.currentYear);
+    alert("הכפילויות נמחקו בהצלחה. יתרות החוב יתעדכנו כשתחזור לדשבורד.");
+    $("dup-results").innerHTML = `<p style="color:var(--green);font-size:14px;"><i class="ti ti-check"></i> נוקה בהצלחה.</p>`;
+  });
 });
 
 // ---------- Public view ----------
