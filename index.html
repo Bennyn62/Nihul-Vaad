@@ -209,22 +209,13 @@
 
     <!-- ========== דוחות ========== -->
     <section id="view-reports" class="hidden">
-      <div class="btn-row" style="flex-wrap:wrap;">
-        <button class="btn tab-active" id="repmode-freeform" data-mode="freeform">טווח תאריכים חופשי</button>
-        <button class="btn tab-inactive" id="repmode-byyear" data-mode="byyear">לפי שנה ותקופה</button>
+      <div class="btn-row">
+        <button class="btn tab-active" id="repmode-dates" data-mode="dates">דוחות</button>
         <button class="btn tab-inactive" id="repmode-projects" data-mode="projects">פרויקטים</button>
       </div>
 
-      <div id="repmode-freeform-panel">
-        <div style="display:flex;gap:8px;align-items:end;margin-bottom:10px;">
-          <div style="flex:1;"><label>מתאריך</label><input type="date" id="custom-start"></div>
-          <div style="flex:1;"><label>עד תאריך</label><input type="date" id="custom-end"></div>
-        </div>
-        <button class="btn primary" id="btn-apply-custom" style="margin-bottom:14px;">הצג דוח</button>
-      </div>
-
-      <div id="repmode-byyear-panel" class="hidden">
-        <label>שנה</label>
+      <div id="repmode-dates-panel">
+        <label>שנה ותקופה</label>
         <select id="report-year-select" style="margin-bottom:10px;"></select>
         <div class="btn-row" style="flex-wrap:wrap;gap:6px;margin-bottom:4px;">
           <button class="btn" data-period="quarter" style="width:auto;flex:none;padding:6px 12px;font-size:14px;">רבעוני</button>
@@ -232,6 +223,13 @@
           <button class="btn" data-period="year" style="width:auto;flex:none;padding:6px 12px;font-size:14px;">שנתי</button>
         </div>
         <div id="report-subperiod-picker" style="margin:10px 0;"></div>
+
+        <p style="font-size:14px;font-weight:600;color:var(--text-secondary);margin:16px 0 10px;border-top:1px solid var(--border);padding-top:14px;">או טווח תאריכים חופשי</p>
+        <div style="display:flex;gap:8px;align-items:end;margin-bottom:10px;">
+          <div style="flex:1;"><label>מתאריך</label><input type="date" id="custom-start"></div>
+          <div style="flex:1;"><label>עד תאריך</label><input type="date" id="custom-end"></div>
+        </div>
+        <button class="btn primary" id="btn-apply-custom" style="margin-bottom:14px;">הצג דוח</button>
       </div>
 
       <div id="regular-report-content">
@@ -264,6 +262,7 @@
         <label>בחר פרויקט</label>
         <select id="report-project-select" style="margin-bottom:10px;"></select>
         <div id="project-report-content"></div>
+        <button class="btn" id="btn-export-project-report" style="margin-top:14px;"><i class="ti ti-file-download"></i> הפקת דוח PDF</button>
       </div>
     </section>
 
@@ -285,6 +284,8 @@
         <input type="text" id="set-address" placeholder="לדוגמה: רחוב הרצל 10, נתניה">
         <label>דמי ועד חודשיים (ברירת מחדל)</label>
         <input type="number" id="set-fee" value="80">
+        <label>דמי תרבות הדיור השנתיים (לכל דירה, מ-2026 והלאה)</label>
+        <input type="number" id="set-culture-fee" value="30">
         <label>חתימת הוועד</label>
         <div class="sig-box"><canvas id="sig-pad" width="400" height="120"></canvas></div>
         <div class="btn-row">
@@ -292,27 +293,6 @@
           <button class="btn primary" id="btn-save-sig">שמור חתימה</button>
         </div>
         <button class="btn success" id="btn-save-settings">שמור הגדרות</button>
-      </div>
-      <div class="card" id="import-card">
-        <p style="font-weight:700;font-size:16px;margin:0 0 8px;">ייבוא נתונים היסטוריים</p>
-        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;" id="import-summary">טוען...</p>
-        <button class="btn primary" id="btn-import-history">ייבא נתונים היסטוריים (2023-2026)</button>
-        <p style="font-size:13px;color:var(--text-muted);margin:10px 0 0;">שים לב: תאריכי תשלומי דמי הוועד ברמת דירה לא נשמרו בקובץ המקורי בפירוט (רק סכום מצטבר לחודש) - הם יובאו עם תאריך משוער (ה-10 לחודש). ההוצאות יובאו עם התאריך המדויק כפי שמופיע בקובץ. גיליון "2022" (שהתברר כזהה בפועל ל-2023) לא יובא - נתוני 2022 האמיתיים יוזנו על ידך ידנית.</p>
-        <p id="import-done-note" class="hidden" style="font-size:14px;color:var(--text-success);margin:10px 0 0;"><i class="ti ti-check"></i> הייבוא בוצע בעבר.</p>
-      </div>
-
-      <div class="card" id="dup-check-card">
-        <p style="font-weight:700;font-size:16px;margin:0 0 8px;">בדיקת כפילויות בתנועות</p>
-        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;">אם החוב שמוצג נראה גבוה מדי, ייתכן שהייבוא ההיסטורי רץ פעמיים בטעות ויצר תנועות כפולות. הכלי הזה יבדוק ויציג ממצאים לפני שמוחקים משהו.</p>
-        <button class="btn" id="btn-check-duplicates">בדוק כפילויות</button>
-        <div id="dup-results" style="margin-top:14px;"></div>
-      </div>
-
-      <div class="card" id="baltam-migrate-card">
-        <p style="font-weight:700;font-size:16px;margin:0 0 8px;">העברת נתוני בלת"ם לפרויקט נפרד</p>
-        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;">הכנסות/הוצאות פיצוץ צנרת המים הראשי (2024-2025) יוצאו מהחישובים השוטפים של הוועד (דמי ועד חודשיים) ויעברו לכרטיסיית פרויקט נפרדת עם סיכום עצמאי משלה.</p>
-        <button class="btn primary" id="btn-migrate-baltam">בצע העברה</button>
-        <p id="baltam-migrate-status" style="font-size:14px;margin-top:10px;"></p>
       </div>
 
       <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">ניהול דירות ודיירים</p>
@@ -387,7 +367,7 @@ const $ = (id) => document.getElementById(id);
 let STATE = {
   role: null,            // 'admin' | 'resident' | null
   residentUnitId: null,
-  settings: { name: "ועד בית", address: "", fee: 80, signatureDataUrl: "" },
+  settings: { name: "ועד בית", address: "", fee: 80, cultureFee: 30, signatureDataUrl: "" },
   units: [],              // [{id, number, currentName, currentPhone, history:[]}]
   transactions: [],        // cached for current year
   currentYear: new Date().getFullYear(),
@@ -434,7 +414,7 @@ async function addUnit() {
   STATE.units.push({ id: unitId, number: nextNum, currentName: "", currentPhone: "", pin: "", history: [], createdYear, manualDebtAdjustment: 0 });
 }
 function getUnitCumulative(unitId) {
-  return STATE.unitDebts[unitId] || { paid: 0, expected: 0, adjustment: 0, debt: 0 };
+  return STATE.unitDebts[unitId] || { paid: 0, expected: 0, adjustment: 0, debt: 0, cultureExpected: 0, culturePaid: 0, cultureDebt: 0 };
 }
 async function loadTransactions(year) {
   const q = query(collection(db, "transactions"), where("year", "==", year));
@@ -444,7 +424,8 @@ async function loadTransactions(year) {
 async function computeAllTimeBalance() {
   const snap = await getDocs(collection(db, "transactions"));
   let income = 0, expense = 0;
-  const paidByUnit = {};
+  const paidByUnit = {};       // regular monthly dues payments only
+  const culturePaidByUnit = {}; // "תרבות הדיור" annual fee payments only
   const earliestYearByUnit = {};
   STATE.allTransactionsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   STATE.allTransactionsCache.forEach(t => {
@@ -452,7 +433,11 @@ async function computeAllTimeBalance() {
     if (t.type === "income") {
       income += (t.amount||0);
       if (t.unitId) {
-        paidByUnit[t.unitId] = (paidByUnit[t.unitId]||0) + (t.amount||0);
+        if (t.category === "תרבות הדיור") {
+          culturePaidByUnit[t.unitId] = (culturePaidByUnit[t.unitId]||0) + (t.amount||0);
+        } else {
+          paidByUnit[t.unitId] = (paidByUnit[t.unitId]||0) + (t.amount||0);
+        }
         if (t.year && (!earliestYearByUnit[t.unitId] || t.year < earliestYearByUnit[t.unitId])) {
           earliestYearByUnit[t.unitId] = t.year;
         }
@@ -479,7 +464,18 @@ async function computeAllTimeBalance() {
     const expected = STATE.settings.fee * expectedMonths;
     const paid = paidByUnit[u.id] || 0;
     const adjustment = u.manualDebtAdjustment || 0;
-    STATE.unitDebts[u.id] = { paid, expected, adjustment, debt: expected - paid + adjustment };
+
+    // "תרבות הדיור" - tracked completely separately, 30₪/year (configurable) starting 2026
+    let cultureYears = 0;
+    for (let y = Math.max(startYear, 2026); y <= nowYear; y++) cultureYears++;
+    const cultureExpected = (STATE.settings.cultureFee || 30) * cultureYears;
+    const culturePaid = culturePaidByUnit[u.id] || 0;
+    const cultureDebt = cultureExpected - culturePaid;
+
+    STATE.unitDebts[u.id] = {
+      paid, expected, adjustment, debt: expected - paid + adjustment,
+      cultureExpected, culturePaid, cultureDebt
+    };
   });
   return STATE.allTimeBalance;
 }
@@ -642,11 +638,15 @@ function unitStatus(unit) {
   return { ...cum, isVacant, turnover, status };
 }
 
+const UNIT_COLORS = ["#eaf2ff","#eafaf0","#fff3e6","#f3ecff","#ffeef5","#fffbe0","#e6faf7","#ffe9e6","#e6f7ff","#fdeeee","#f5f0e6","#e9f0ff"];
+function unitColor(number) {
+  return UNIT_COLORS[((number||1) - 1) % UNIT_COLORS.length];
+}
 function unitCardHtml(unit, forDashboard) {
   const st = unitStatus(unit);
   const label = st.isVacant ? "ריקה" : (st.status === "paid" ? "אין חוב" : `חוב מצטבר: ${fmtILS(st.debt)}`);
   return `
-  <div class="unit-card ${st.turnover ? "turnover" : ""}" data-unit="${unit.id}">
+  <div class="unit-card ${st.turnover ? "turnover" : ""}" style="background:${unitColor(unit.number)};" data-unit="${unit.id}">
     <div class="row-top">
       <p class="num">דירה ${unit.number}</p>
       <span class="dot ${st.status}"></span>
@@ -725,6 +725,18 @@ function renderUnitCumulativeCard(unitId) {
       </table>
       <p style="font-size:13px;color:var(--text-muted);margin:8px 0 10px;">זו הערכה שמניחה תשלום מלא בכל חודש שכבר עבר מאז שהדירה נוצרה במערכת (${unit.createdYear||2023}) - כולל רק חודשים שכבר חלפו בשנה הנוכחית, לא כל 12 החודשים מראש. אם הדירה הייתה ריקה חלק מהזמן, השתמש ב"התאמה ידנית" (מספר שלילי מקטין את החוב) כדי לתקן.</p>
       <button class="btn ghost" id="btn-edit-debt-adj">ערוך התאמה ידנית</button>
+    </div>
+    <div class="card">
+      <p style="font-weight:700;font-size:15px;margin:0 0 8px;">תרבות הדיור (החל מ-2026)</p>
+      <table style="width:100%;font-size:14px;border-collapse:collapse;">
+        <tr><td style="color:var(--text-secondary);padding:3px 0;">שולם</td><td style="text-align:left;">${fmtILS(cum.culturePaid)}</td></tr>
+        <tr><td style="color:var(--text-secondary);padding:3px 0;">צפי (${STATE.settings.cultureFee||30}₪ לשנה)</td><td style="text-align:left;">${fmtILS(cum.cultureExpected)}</td></tr>
+      </table>
+      <div style="margin-top:10px;">
+        ${cum.cultureDebt <= 0
+          ? `<span class="badge success">שולם</span>`
+          : `<span class="badge warning">נותר לתשלום: ${fmtILS(cum.cultureDebt)}</span>`}
+      </div>
     </div>`;
   $("btn-edit-debt-adj").addEventListener("click", async () => {
     const val = prompt("התאמה ידנית ליתרת החוב (מספר שלילי = מקטין חוב, למשל בגלל תקופת ריקנות):", String(unit.manualDebtAdjustment||0));
@@ -891,16 +903,23 @@ function openReceipt(tx) {
 $("btn-edit-sig").addEventListener("click", () => showView("view-settings"));
 $("btn-receipt-done").addEventListener("click", () => showView("view-dashboard"));
 $("btn-share-whatsapp").addEventListener("click", async () => {
-  const tx = STATE.pendingReceipt;
-  const unit = STATE.units.find(u => u.id === tx.unitId);
-  const msg = `קבלה מ${STATE.settings.name}\nדירה ${unit.number} - ${unit.currentName}\nסכום: ${fmtILS(tx.amount)}\nתאריך: ${tx.date}\nתודה על התשלום!`;
-  const phone = (unit.currentPhone||"").replace(/\D/g,"");
-  const url = `https://wa.me/${phone.startsWith("0") ? "972"+phone.slice(1) : phone}?text=${encodeURIComponent(msg)}`;
-  window.open(url, "_blank");
-  await updateDoc(doc(db, "transactions", tx.id), { sharedWhatsapp: true });
-  $("btn-share-whatsapp").classList.add("hidden");
-  $("rc-sig-block").classList.add("hidden");
-  $("rc-sent-badge").classList.remove("hidden");
+  try {
+    const tx = STATE.pendingReceipt;
+    const unit = tx && STATE.units.find(u => u.id === tx.unitId);
+    if (!unit) { alert("שגיאה: לא נמצאה דירה משויכת לקבלה זו."); return; }
+    const phone = (unit.currentPhone || "").replace(/\D/g,"");
+    if (!phone) { alert(`לדירה ${unit.number} (${unit.currentName||""}) אין מספר טלפון שמור. הוסף טלפון בהגדרות → ניהול דירות ודיירים כדי לאפשר שיתוף בוואטסאפ.`); return; }
+    const msg = `קבלה מ${STATE.settings.name}\nדירה ${unit.number} - ${unit.currentName}\nסכום: ${fmtILS(tx.amount)}\nתאריך: ${tx.date}\nתודה על התשלום!`;
+    const waNumber = phone.startsWith("0") ? "972"+phone.slice(1) : phone;
+    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank");
+    if (tx.id) await updateDoc(doc(db, "transactions", tx.id), { sharedWhatsapp: true });
+    $("btn-share-whatsapp").classList.add("hidden");
+    $("rc-sig-block").classList.add("hidden");
+    $("rc-sent-badge").classList.remove("hidden");
+  } catch (e) {
+    alert("שגיאה בשיתוף: " + e.message);
+  }
 });
 
 // ---------- Reports ----------
@@ -915,27 +934,25 @@ function initReportsView() {
   $("report-year-select").innerHTML = years.map(y =>
     `<option value="${y}" ${y===realYear?"selected":""}>${y}</option>`).join("");
 
-  // default: freeform mode, this month prefilled
-  switchReportMode("freeform");
+  switchReportMode("dates");
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10);
   const last = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10);
   $("custom-start").value = first;
   $("custom-end").value = last;
-  applyFreeformRange();
+  // default view: current month via the quarter/year buttons - trigger "year" for a fuller picture
+  document.querySelectorAll("[data-period]").forEach(x => x.classList.remove("tab-active"));
+  const yearBtn = document.querySelector('[data-period="year"]');
+  if (yearBtn) yearBtn.click();
 }
 
-$("repmode-freeform").addEventListener("click", () => switchReportMode("freeform"));
-$("repmode-byyear").addEventListener("click", () => switchReportMode("byyear"));
+$("repmode-dates").addEventListener("click", () => switchReportMode("dates"));
 function switchReportMode(mode) {
-  $("repmode-freeform").classList.toggle("tab-active", mode==="freeform");
-  $("repmode-freeform").classList.toggle("tab-inactive", mode!=="freeform");
-  $("repmode-byyear").classList.toggle("tab-active", mode==="byyear");
-  $("repmode-byyear").classList.toggle("tab-inactive", mode!=="byyear");
+  $("repmode-dates").classList.toggle("tab-active", mode==="dates");
+  $("repmode-dates").classList.toggle("tab-inactive", mode!=="dates");
   $("repmode-projects").classList.toggle("tab-active", mode==="projects");
   $("repmode-projects").classList.toggle("tab-inactive", mode!=="projects");
-  $("repmode-freeform-panel").classList.toggle("hidden", mode!=="freeform");
-  $("repmode-byyear-panel").classList.toggle("hidden", mode!=="byyear");
+  $("repmode-dates-panel").classList.toggle("hidden", mode!=="dates");
   $("regular-report-content").classList.toggle("hidden", mode==="projects");
   $("repmode-projects-panel").classList.toggle("hidden", mode!=="projects");
   if (mode === "projects") initProjectsReportMode();
@@ -1142,7 +1159,7 @@ async function deleteExpenseTransaction(txId) {
 $("btn-export-report").addEventListener("click", () => {
   if (!lastReportRange) { alert("יש להציג דוח קודם"); return; }
   generatePrintReport(lastReportRange);
-  setTimeout(() => window.print(), 200);
+  triggerPrint(`דוח ${STATE.settings.name || "ועד בית"} - ${lastReportRange.label}`);
 });
 
 function generatePrintReport(rd) {
@@ -1154,15 +1171,15 @@ function generatePrintReport(rd) {
   const openingBalance = before.reduce((s,t) => s + (t.type==="income" ? t.amount : -t.amount), 0);
   const closingBalance = openingBalance + income - expense;
 
-  const expenseTxs = txs.filter(t => t.type === "expense").sort((a,b) => a.date.localeCompare(b.date));
+  const expenseTxs = txs.filter(t => t.type === "expense");
   const byCatPrint = {};
   expenseTxs.forEach(t => byCatPrint[t.category] = (byCatPrint[t.category]||0) + t.amount);
-  const catRows = Object.entries(byCatPrint).sort((a,b) => b[1]-a[1]);
+  const catLabels = Object.keys(byCatPrint);
+  const catData = catLabels.map(l => byCatPrint[l]);
 
   let chartImg = "";
-  const canvas = $("rep-chart");
-  if (canvas && repChart) {
-    try { chartImg = canvas.toDataURL("image/png"); } catch(e) {}
+  if (catLabels.length) {
+    chartImg = renderChartToImage(catLabels, catData);
   }
 
   const today = todayISO().split("-").reverse().join(".");
@@ -1170,7 +1187,7 @@ function generatePrintReport(rd) {
   $("print-report").innerHTML = `
     <h1>${STATE.settings.name || "ועד בית"}</h1>
     <h2>${STATE.settings.address || ""}</h2>
-    <p class="pr-period">דוח כספי תקופתי &nbsp;|&nbsp; לתקופה: ${rd.startISO.split("-").reverse().join(".")} - ${rd.endISO.split("-").reverse().join(".")} &nbsp;|&nbsp; הופק בתאריך: ${today}</p>
+    <p class="pr-period">דוח כספי - ${rd.label} &nbsp;|&nbsp; לתקופה: ${rd.startISO.split("-").reverse().join(".")} - ${rd.endISO.split("-").reverse().join(".")} &nbsp;|&nbsp; הופק בתאריך: ${today}</p>
     <table class="pr-summary">
       <tr><td class="label">יתרת פתיחה</td><td class="val">${fmtILS(openingBalance)}</td></tr>
       <tr><td class="label">סך הכנסות בתקופה</td><td class="val">${fmtILS(income)}</td></tr>
@@ -1178,22 +1195,38 @@ function generatePrintReport(rd) {
       <tr><td class="label">יתרת סגירה</td><td class="val">${fmtILS(closingBalance)}</td></tr>
     </table>
     ${chartImg ? `<p style="font-weight:700;margin-bottom:8px;">התפלגות הוצאות לפי קטגוריה</p><img class="pr-chart-img" src="${chartImg}">` : ""}
-    <p style="font-weight:700;margin-bottom:8px;">פירוט הוצאות לפי קטגוריה</p>
-    <table class="pr-expenses">
-      <thead><tr><th>קטגוריה</th><th>סכום</th></tr></thead>
-      <tbody>
-        ${catRows.length ? catRows.map(([cat, amt]) => `
-          <tr>
-            <td>${cat}</td>
-            <td>${fmtILS(amt)}</td>
-          </tr>`).join("") : `<tr><td colspan="2">אין הוצאות בתקופה זו</td></tr>`}
-      </tbody>
-    </table>
     <div class="pr-sign">
       בברכה,<br>
       צוות הוועד: בני ארגאו
     </div>
   `;
+}
+
+function renderChartToImage(labels, data) {
+  const tmpCanvas = document.createElement("canvas");
+  tmpCanvas.width = 400; tmpCanvas.height = 400;
+  const colors = ["#2a78d6","#1baf7a","#eda100","#e34948","#4a3aa7","#e87ba4","#eb6834"];
+  const tmpChart = new Chart(tmpCanvas, {
+    type: "pie",
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }] },
+    options: { responsive:false, animation:false, plugins:{legend:{position:"bottom", labels:{font:{size:11}}}} }
+  });
+  const img = tmpCanvas.toDataURL("image/png");
+  tmpChart.destroy();
+  return img;
+}
+
+function triggerPrint(titleForFile) {
+  const originalTitle = document.title;
+  document.title = titleForFile;
+  document.body.classList.add("printing-report");
+  const cleanup = () => {
+    document.body.classList.remove("printing-report");
+    document.title = originalTitle;
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  setTimeout(() => { window.print(); setTimeout(cleanup, 1000); }, 200);
 }
 
 // ---------- Projects report mode ----------
@@ -1224,8 +1257,12 @@ function renderGenericChart(canvasId, legendId, labels, data) {
     : `<p class="center-note">אין נתונים</p>`;
 }
 
+let lastProjectReportId = null, lastProjectReportTitle = "";
 function renderProjectReport(projectId) {
   if (!projectId) { $("project-report-content").innerHTML = ""; return; }
+  lastProjectReportId = projectId;
+  const project = (STATE.reportProjectsCache||[]).find(p => p.id === projectId);
+  lastProjectReportTitle = project ? project.title : "פרויקט";
   const txs = STATE.allTransactionsCache.filter(t => t.projectId === projectId);
   const incomeTxs = txs.filter(t => t.type === "income");
   const expenseTxs = txs.filter(t => t.type === "expense").sort((a,b) => a.date.localeCompare(b.date));
@@ -1278,6 +1315,54 @@ function renderProjectReport(projectId) {
   renderGenericChart("proj-income-chart", "proj-income-legend", unitLabels, unitData);
   renderGenericChart("proj-expense-chart", "proj-expense-legend", catLabels, catData);
 }
+
+function generateProjectPrintReport(projectId) {
+  const project = (STATE.reportProjectsCache||[]).find(p => p.id === projectId);
+  const title = project ? project.title : "פרויקט";
+  const txs = STATE.allTransactionsCache.filter(t => t.projectId === projectId);
+  const incomeTxs = txs.filter(t => t.type === "income");
+  const expenseTxs = txs.filter(t => t.type === "expense");
+  const income = incomeTxs.reduce((s,t)=>s+t.amount,0);
+  const expense = expenseTxs.reduce((s,t)=>s+t.amount,0);
+
+  const byUnit = {};
+  incomeTxs.forEach(t => {
+    const unit = STATE.units.find(u=>u.id===t.unitId);
+    const label = unit ? `דירה ${unit.number}` : "לא משויך";
+    byUnit[label] = (byUnit[label]||0) + t.amount;
+  });
+  const unitLabels = Object.keys(byUnit).sort((a,b) => (parseInt(a.replace(/\D/g,""))||999) - (parseInt(b.replace(/\D/g,""))||999));
+  const unitData = unitLabels.map(l => byUnit[l]);
+
+  const byCat = {};
+  expenseTxs.forEach(t => byCat[t.category] = (byCat[t.category]||0) + t.amount);
+  const catLabels = Object.keys(byCat);
+  const catData = catLabels.map(l => byCat[l]);
+
+  const chartImg = catLabels.length ? renderChartToImage(catLabels, catData) : "";
+  const today = todayISO().split("-").reverse().join(".");
+
+  $("print-report").innerHTML = `
+    <h1>${STATE.settings.name || "ועד בית"}</h1>
+    <h2>${STATE.settings.address || ""}</h2>
+    <p class="pr-period">דוח פרויקט - ${title} &nbsp;|&nbsp; סטטוס: ${project ? (project.status||"בבחינה") : ""} &nbsp;|&nbsp; הופק בתאריך: ${today}</p>
+    <table class="pr-summary">
+      <tr><td class="label">סך הכנסות</td><td class="val">${fmtILS(income)}</td></tr>
+      <tr><td class="label">סך הוצאות</td><td class="val">${fmtILS(expense)}</td></tr>
+      <tr><td class="label">מאזן</td><td class="val">${fmtILS(income-expense)}</td></tr>
+    </table>
+    ${chartImg ? `<p style="font-weight:700;margin-bottom:8px;">התפלגות הוצאות לפי קטגוריה</p><img class="pr-chart-img" src="${chartImg}">` : ""}
+    <div class="pr-sign">
+      בברכה,<br>
+      צוות הוועד: בני ארגאו
+    </div>
+  `;
+}
+$("btn-export-project-report").addEventListener("click", () => {
+  if (!lastProjectReportId) { alert("יש לבחור פרויקט קודם"); return; }
+  generateProjectPrintReport(lastProjectReportId);
+  triggerPrint(`דוח ${STATE.settings.name || "ועד בית"} - פרויקט ${lastProjectReportTitle}`);
+});
 
 // ---------- Projects ----------
 async function renderProjects() {
@@ -1370,7 +1455,7 @@ function renderSettings() {
   $("set-name").value = STATE.settings.name || "";
   $("set-address").value = STATE.settings.address || "";
   $("set-fee").value = STATE.settings.fee || 80;
-  renderImportCard();
+  $("set-culture-fee").value = STATE.settings.cultureFee || 30;
   const canvas = $("sig-pad");
   sigCtx = canvas.getContext("2d");
   sigCtx.clearRect(0,0,canvas.width,canvas.height);
@@ -1399,8 +1484,10 @@ $("btn-save-sig").addEventListener("click", async () => {
 $("btn-save-settings").addEventListener("click", async () => {
   await saveSettings({
     name: $("set-name").value, address: $("set-address").value,
-    fee: parseFloat($("set-fee").value || "80")
+    fee: parseFloat($("set-fee").value || "80"),
+    cultureFee: parseFloat($("set-culture-fee").value || "30")
   });
+  await computeAllTimeBalance();
   $("hdr-title").textContent = STATE.settings.name;
   $("hdr-sub").textContent = STATE.settings.address;
   alert("ההגדרות נשמרו");
@@ -1425,168 +1512,6 @@ async function editUnit(unitId) {
   await updateUnit(unitId, { currentName: newName, currentPhone: newPhone, pin: newPin, history, moveInDate: newName !== unit.currentName ? todayISO() : (unit.moveInDate||"") });
   renderSettings();
 }
-
-// ---------- Historical data import ----------
-function renderImportCard() {
-  const incCount = historicalData.income.length;
-  const expCount = historicalData.expense.length;
-  const incSum = historicalData.income.reduce((s,x)=>s+x.amount,0);
-  const expSum = historicalData.expense.reduce((s,x)=>s+x.amount,0);
-  $("import-summary").textContent =
-    `${incCount} רשומות הכנסה (סה"כ ${fmtILS(incSum)}) + ${expCount} רשומות הוצאה (סה"כ ${fmtILS(expSum)}), שנים 2023-2026.`;
-  $("import-done-note").classList.toggle("hidden", !STATE.settings.historicalImported);
-  $("btn-import-history").textContent = STATE.settings.historicalImported
-    ? "ייבא שוב (עלול ליצור כפילויות!)" : "ייבא נתונים היסטוריים (2023-2026)";
-}
-$("btn-import-history").addEventListener("click", async () => {
-  const ok = confirm(
-    `הפעולה תוסיף ${historicalData.income.length} תנועות הכנסה ו-${historicalData.expense.length} תנועות הוצאה, ` +
-    `ותעדכן היסטוריית דיירים ל-12 הדירות. זו פעולה חד-פעמית מומלצת. להמשיך?`
-  );
-  if (!ok) return;
-  $("btn-import-history").disabled = true;
-  $("btn-import-history").textContent = "מייבא... נא לא לסגור את הדף";
-  try {
-    // batched writes, max ~450 ops per batch
-    const allTx = [
-      ...historicalData.income.map(x => ({
-        type: "income", unitId: String(x.unit), category: x.category, amount: x.amount,
-        months: x.month !== null && x.month !== undefined ? [x.month] : [],
-        method: x.method, date: x.date, note: x.note, year: x.year, createdAt: Date.now()
-      })),
-      ...historicalData.expense.map(x => ({
-        type: "expense", category: x.category, amount: x.amount, method: x.method,
-        supplier: x.desc || "", desc: x.note, date: x.date, year: x.year, createdAt: Date.now()
-      }))
-    ];
-    for (let i = 0; i < allTx.length; i += 400) {
-      const batch = writeBatch(db);
-      const chunk = allTx.slice(i, i + 400);
-      chunk.forEach(tx => {
-        const ref = doc(collection(db, "transactions"));
-        batch.set(ref, tx);
-      });
-      await batch.commit();
-    }
-    // update unit history
-    for (const [unitNum, info] of Object.entries(historicalData.unitsHistory)) {
-      const unitId = String(unitNum);
-      const existing = STATE.units.find(u => u.id === unitId);
-      if (!existing) continue;
-      const mergedHistory = [
-        ...(existing.history || []),
-        ...info.history.map(h => ({ name: h.name, startDate: "", endDate: h.note }))
-      ];
-      await updateUnit(unitId, { history: mergedHistory });
-    }
-    // add renovation quotes project
-    await addDoc(collection(db, "projects"), historicalData.quotesProject);
-    await saveSettings({ historicalImported: true });
-    if (STATE.currentYear) await loadTransactions(STATE.currentYear);
-    await computeAllTimeBalance();
-    alert("הייבוא הושלם בהצלחה!");
-  } catch (e) {
-    alert("שגיאה בייבוא: " + e.message);
-  } finally {
-    $("btn-import-history").disabled = false;
-    renderImportCard();
-  }
-});
-
-// ---------- Duplicate transaction checker ----------
-$("btn-check-duplicates").addEventListener("click", async () => {
-  $("dup-results").innerHTML = `<p class="center-note">בודק...</p>`;
-  await computeAllTimeBalance(); // refresh full cache first
-  const groups = {};
-  STATE.allTransactionsCache.forEach(t => {
-    const key = [t.type, t.unitId||"", t.category||"", t.amount, t.date, (t.months||[]).join(",")].join("|");
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(t);
-  });
-  const dupGroups = Object.values(groups).filter(g => g.length > 1);
-  if (!dupGroups.length) {
-    $("dup-results").innerHTML = `<p style="color:var(--green);font-size:14px;"><i class="ti ti-check"></i> לא נמצאו כפילויות - כל התנועות תקינות.</p>`;
-    return;
-  }
-  let totalExcessCount = 0, totalExcessAmount = 0;
-  dupGroups.forEach(g => { totalExcessCount += g.length - 1; totalExcessAmount += g[0].amount * (g.length - 1); });
-
-  $("dup-results").innerHTML = `
-    <p style="color:var(--red);font-size:14px;font-weight:700;margin-bottom:10px;">
-      נמצאו ${dupGroups.length} קבוצות עם כפילות - סה"כ ${totalExcessCount} תנועות מיותרות (${fmtILS(totalExcessAmount)})
-    </p>
-    <div id="dup-list"></div>
-    <button class="btn danger" id="btn-remove-duplicates" style="margin-top:10px;">מחק את כל הכפילויות (משאיר עותק אחד מכל קבוצה)</button>`;
-
-  $("dup-list").innerHTML = dupGroups.map(g => {
-    const t = g[0];
-    const unit = t.unitId ? (STATE.units.find(u=>u.id===t.unitId)||{}).number : null;
-    return `<div class="card" style="padding:10px 14px;margin-bottom:6px;">
-      <p style="font-size:14px;margin:0;">${t.type==="income"?"הכנסה":"הוצאה"}${unit?" - דירה "+unit:""} - ${t.category} - ${fmtILS(t.amount)} - ${t.date}</p>
-      <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">מופיע ${g.length} פעמים במסד הנתונים</p>
-    </div>`;
-  }).join("");
-
-  $("btn-remove-duplicates").addEventListener("click", async () => {
-    if (!confirm(`למחוק ${totalExcessCount} תנועות כפולות (משאיר עותק אחד מכל קבוצה, לפי הראשונה שנוצרה)? הפעולה בלתי הפיכה.`)) return;
-    const btn = $("btn-remove-duplicates");
-    btn.disabled = true;
-    btn.textContent = "מוחק...";
-    for (const g of dupGroups) {
-      const sorted = [...g].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
-      for (let i = 1; i < sorted.length; i++) {
-        await deleteDoc(doc(db, "transactions", sorted[i].id));
-      }
-    }
-    await computeAllTimeBalance();
-    if (STATE.currentYear) await loadTransactions(STATE.currentYear);
-    alert("הכפילויות נמחקו בהצלחה. יתרות החוב יתעדכנו כשתחזור לדשבורד.");
-    $("dup-results").innerHTML = `<p style="color:var(--green);font-size:14px;"><i class="ti ti-check"></i> נוקה בהצלחה.</p>`;
-  });
-});
-
-// ---------- Baltam special-levy migration ----------
-$("btn-migrate-baltam").addEventListener("click", async () => {
-  if (!confirm('להעביר את כל נתוני בלת"ם (פיצוץ צנרת מים) לכרטיסיית פרויקט נפרדת? הן יוצאו מחישובי ההכנסות/הוצאות השוטפים.')) return;
-  const btn = $("btn-migrate-baltam");
-  btn.disabled = true;
-  btn.textContent = "מעביר...";
-  try {
-    const projSnap = await getDocs(collection(db, "projects"));
-    let project = projSnap.docs.map(d=>({id:d.id, ...d.data()})).find(p => p.title && p.title.includes('בלת"ם'));
-    let projectId;
-    if (project) {
-      projectId = project.id;
-    } else {
-      const ref = await addDoc(collection(db, "projects"), {
-        title: 'בלת"ם 2024 - גילוי ותיקון פיצוץ צנרת מים ראשי',
-        status: "בוצע", quotes: []
-      });
-      projectId = ref.id;
-    }
-    const allSnap = await getDocs(collection(db, "transactions"));
-    let count = 0;
-    for (const d of allSnap.docs) {
-      const t = d.data();
-      const isBaltamIncome = t.type === "income" && t.category === 'בלת"ם - תיקון צנרת';
-      const isBaltamExpense = t.type === "expense" && t.desc && t.desc.includes('פרויקט בלת"ם');
-      if ((isBaltamIncome || isBaltamExpense) && !t.projectId) {
-        await updateDoc(doc(db, "transactions", d.id), { projectId });
-        count++;
-      }
-    }
-    await computeAllTimeBalance();
-    if (STATE.currentYear) await loadTransactions(STATE.currentYear);
-    $("baltam-migrate-status").innerHTML = count
-      ? `<span style="color:var(--green);"><i class="ti ti-check"></i> הועברו ${count} תנועות לפרויקט "${(project&&project.title)||'בלת"ם'}". הדשבורד עודכן.</span>`
-      : `<span style="color:var(--text-muted);">לא נמצאו תנועות בלת"ם חדשות להעברה (ייתכן שכבר הועברו בעבר).</span>`;
-  } catch (e) {
-    alert("שגיאה: " + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "בצע העברה";
-  }
-});
 
 // ---------- Public view ----------
 const chartInstances = {};
@@ -1668,7 +1593,7 @@ $("btn-goto-add-expense").addEventListener("click", () => showView("view-add-exp
 
 function goToReportWithList(type) {
   showView("view-reports");
-  switchReportMode("byyear");
+  switchReportMode("dates");
   $("report-year-select").value = String(STATE.currentYear);
   const yearBtn = document.querySelector('[data-period="year"]');
   if (yearBtn) yearBtn.click();
