@@ -351,8 +351,6 @@ import {
   getFirestore, collection, doc, getDoc, getDocs, setDoc, addDoc,
   updateDoc, deleteDoc, query, where, orderBy, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { historicalData } from "./historicalData.js";
-
 const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
@@ -867,7 +865,12 @@ function openReceipt(tx) {
   const unit = STATE.units.find(u => u.id === tx.unitId);
   $("rc-bname").textContent = STATE.settings.name;
   $("rc-baddr").textContent = STATE.settings.address;
-  $("rc-num").textContent = "#" + STATE.currentYear + "-" + tx.id.slice(0,4).toUpperCase();
+  const rcYear = tx.date.slice(0,4);
+  const rcMonth = tx.date.slice(5,7);
+  const rcUnit = String(unit ? unit.number : 0).padStart(2,"0");
+  const priorReceiptCount = STATE.allTransactionsCache.filter(t => t.type === "income" && t.unitId === tx.unitId).length;
+  const rcCounterDigit = priorReceiptCount % 10;
+  $("rc-num").textContent = `${rcYear}${rcMonth}${rcUnit}${rcCounterDigit}`;
   $("rc-date").textContent = tx.date.split("-").reverse().join(".");
   $("rc-unit").textContent = unit ? unit.number : "";
   $("rc-name").textContent = unit ? unit.currentName : "";
@@ -909,7 +912,21 @@ $("btn-share-whatsapp").addEventListener("click", async () => {
     if (!unit) { alert("שגיאה: לא נמצאה דירה משויכת לקבלה זו."); return; }
     const phone = (unit.currentPhone || "").replace(/\D/g,"");
     if (!phone) { alert(`לדירה ${unit.number} (${unit.currentName||""}) אין מספר טלפון שמור. הוסף טלפון בהגדרות → ניהול דירות ודיירים כדי לאפשר שיתוף בוואטסאפ.`); return; }
-    const msg = `קבלה מ${STATE.settings.name}\nדירה ${unit.number} - ${unit.currentName}\nסכום: ${fmtILS(tx.amount)}\nתאריך: ${tx.date}\nתודה על התשלום!`;
+    const receiptNum = $("rc-num").textContent;
+    let itemsText;
+    if (tx.category === "דמי ועד" && STATE.settings.fee) {
+      const fee = STATE.settings.fee;
+      const fullMonths = Math.floor(tx.amount / fee);
+      const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
+      const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
+      const lines = [];
+      for (let i = 0; i < fullMonths; i++) lines.push(`- דמי ועד ${HEB_MONTHS[(startMonth+i)%12]}: ${fmtILS(fee)}`);
+      if (remainder > 0) lines.push(`- מקדמה לחודש הבא: ${fmtILS(remainder)}`);
+      itemsText = lines.length ? lines.join("\n") : `- ${tx.category}: ${fmtILS(tx.amount)}`;
+    } else {
+      itemsText = `- ${tx.category}: ${fmtILS(tx.amount)}`;
+    }
+    const msg = `*${STATE.settings.name}*\n${STATE.settings.address || ""}\n_קבלה מס' ${receiptNum}_\n\n*דירה:* ${unit.number}\n*שם הדייר:* ${unit.currentName}\n*תאריך:* ${tx.date.split("-").reverse().join(".")}\n*אופן תשלום:* ${tx.method}\n\n${itemsText}\n\n*סה"כ שולם: ${fmtILS(tx.amount)}*\n\nתודה על התשלום! 🙏\nבברכה, ועד הבית`;
     const waNumber = phone.startsWith("0") ? "972"+phone.slice(1) : phone;
     const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
@@ -1605,7 +1622,5 @@ $("d-income-card").addEventListener("click", () => goToReportWithList("income"))
 $("d-expense-card").addEventListener("click", () => goToReportWithList("expense"));
 
 </script>
-<!-- historicalData.js is imported directly inside app.js as an ES module -->
-
 </body>
 </html>
