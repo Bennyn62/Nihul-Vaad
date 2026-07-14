@@ -209,9 +209,10 @@
 
     <!-- ========== דוחות ========== -->
     <section id="view-reports" class="hidden">
-      <div class="btn-row">
+      <div class="btn-row" style="flex-wrap:wrap;">
         <button class="btn tab-active" id="repmode-freeform" data-mode="freeform">טווח תאריכים חופשי</button>
         <button class="btn tab-inactive" id="repmode-byyear" data-mode="byyear">לפי שנה ותקופה</button>
+        <button class="btn tab-inactive" id="repmode-projects" data-mode="projects">פרויקטים</button>
       </div>
 
       <div id="repmode-freeform-panel">
@@ -233,29 +234,37 @@
         <div id="report-subperiod-picker" style="margin:10px 0;"></div>
       </div>
 
-      <p style="font-size:14px;color:var(--text-secondary);margin:14px 0;" id="rep-range-text"></p>
-      <div class="metric-grid cols-3">
-        <div class="metric" id="rep-income-card" style="cursor:pointer;"><p class="label">הכנסות <i class="ti ti-chevron-down" style="font-size:12px;"></i></p><p class="value pos" id="rep-income">-</p></div>
-        <div class="metric" id="rep-expense-card" style="cursor:pointer;"><p class="label">הוצאות <i class="ti ti-chevron-down" style="font-size:12px;"></i></p><p class="value neg" id="rep-expense">-</p></div>
-        <div class="metric"><p class="label">מאזן</p><p class="value" id="rep-balance">-</p></div>
-      </div>
-      <p style="font-weight:700;font-size:16px;margin:0 0 10px;">פילוח הוצאות לפי קטגוריה</p>
-      <div style="position:relative;width:100%;height:220px;margin-bottom:12px;">
-        <canvas id="rep-chart" role="img" aria-label="פילוח הוצאות לפי קטגוריה"></canvas>
-      </div>
-      <div id="rep-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;font-size:14px;color:var(--text-secondary);"></div>
+      <div id="regular-report-content">
+        <p style="font-size:14px;color:var(--text-secondary);margin:14px 0;" id="rep-range-text"></p>
+        <div class="metric-grid cols-3">
+          <div class="metric" id="rep-income-card" style="cursor:pointer;"><p class="label">הכנסות <i class="ti ti-chevron-down" style="font-size:12px;"></i></p><p class="value pos" id="rep-income">-</p></div>
+          <div class="metric" id="rep-expense-card" style="cursor:pointer;"><p class="label">הוצאות <i class="ti ti-chevron-down" style="font-size:12px;"></i></p><p class="value neg" id="rep-expense">-</p></div>
+          <div class="metric"><p class="label">מאזן</p><p class="value" id="rep-balance">-</p></div>
+        </div>
+        <p style="font-weight:700;font-size:16px;margin:0 0 10px;">פילוח הוצאות לפי קטגוריה</p>
+        <div style="position:relative;width:100%;height:220px;margin-bottom:12px;">
+          <canvas id="rep-chart" role="img" aria-label="פילוח הוצאות לפי קטגוריה"></canvas>
+        </div>
+        <div id="rep-legend" style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px;font-size:14px;color:var(--text-secondary);"></div>
 
-      <div id="rep-income-list-wrap" class="hidden">
-        <p style="font-weight:700;font-size:16px;margin:0 0 10px;">רשימה מפורטת של הכנסות</p>
-        <div id="rep-income-list"></div>
+        <div id="rep-income-list-wrap" class="hidden">
+          <p style="font-weight:700;font-size:16px;margin:0 0 10px;">רשימה מפורטת של הכנסות</p>
+          <div id="rep-income-list"></div>
+        </div>
+
+        <div id="rep-expense-list-wrap" class="hidden">
+          <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">רשימה מפורטת של הוצאות</p>
+          <div id="rep-expense-list"></div>
+        </div>
+
+        <button class="btn" id="btn-export-report" style="margin-top:14px;"><i class="ti ti-file-download"></i> הפקת דוח PDF לדיירים</button>
       </div>
 
-      <div id="rep-expense-list-wrap" class="hidden">
-        <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">רשימה מפורטת של הוצאות</p>
-        <div id="rep-expense-list"></div>
+      <div id="repmode-projects-panel" class="hidden">
+        <label>בחר פרויקט</label>
+        <select id="report-project-select" style="margin-bottom:10px;"></select>
+        <div id="project-report-content"></div>
       </div>
-
-      <button class="btn" id="btn-export-report" style="margin-top:14px;"><i class="ti ti-file-download"></i> הפקת דוח PDF לדיירים</button>
     </section>
 
     <!-- Hidden printable report, shown only via print media query -->
@@ -297,6 +306,13 @@
         <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;">אם החוב שמוצג נראה גבוה מדי, ייתכן שהייבוא ההיסטורי רץ פעמיים בטעות ויצר תנועות כפולות. הכלי הזה יבדוק ויציג ממצאים לפני שמוחקים משהו.</p>
         <button class="btn" id="btn-check-duplicates">בדוק כפילויות</button>
         <div id="dup-results" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="card" id="baltam-migrate-card">
+        <p style="font-weight:700;font-size:16px;margin:0 0 8px;">העברת נתוני בלת"ם לפרויקט נפרד</p>
+        <p style="font-size:14px;color:var(--text-secondary);margin:0 0 12px;">הכנסות/הוצאות פיצוץ צנרת המים הראשי (2024-2025) יוצאו מהחישובים השוטפים של הוועד (דמי ועד חודשיים) ויעברו לכרטיסיית פרויקט נפרדת עם סיכום עצמאי משלה.</p>
+        <button class="btn primary" id="btn-migrate-baltam">בצע העברה</button>
+        <p id="baltam-migrate-status" style="font-size:14px;margin-top:10px;"></p>
       </div>
 
       <p style="font-weight:700;font-size:16px;margin:16px 0 10px;">ניהול דירות ודיירים</p>
@@ -432,6 +448,7 @@ async function computeAllTimeBalance() {
   const earliestYearByUnit = {};
   STATE.allTransactionsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
   STATE.allTransactionsCache.forEach(t => {
+    if (t.projectId) return; // project-specific transactions (e.g. special levies) are tracked separately
     if (t.type === "income") {
       income += (t.amount||0);
       if (t.unitId) {
@@ -648,8 +665,8 @@ function renderUnitsGrid(containerId) {
 }
 
 function renderDashboard() {
-  const income = STATE.transactions.filter(t=>t.type==="income").reduce((s,t)=>s+(t.amount||0),0);
-  const expense = STATE.transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+(t.amount||0),0);
+  const income = STATE.transactions.filter(t=>t.type==="income" && !t.projectId).reduce((s,t)=>s+(t.amount||0),0);
+  const expense = STATE.transactions.filter(t=>t.type==="expense" && !t.projectId).reduce((s,t)=>s+(t.amount||0),0);
   $("d-income").textContent = fmtILS(income);
   $("d-expense").textContent = fmtILS(expense);
   $("d-balance").textContent = fmtILS(STATE.allTimeBalance);
@@ -915,9 +932,15 @@ function switchReportMode(mode) {
   $("repmode-freeform").classList.toggle("tab-inactive", mode!=="freeform");
   $("repmode-byyear").classList.toggle("tab-active", mode==="byyear");
   $("repmode-byyear").classList.toggle("tab-inactive", mode!=="byyear");
+  $("repmode-projects").classList.toggle("tab-active", mode==="projects");
+  $("repmode-projects").classList.toggle("tab-inactive", mode!=="projects");
   $("repmode-freeform-panel").classList.toggle("hidden", mode!=="freeform");
   $("repmode-byyear-panel").classList.toggle("hidden", mode!=="byyear");
+  $("regular-report-content").classList.toggle("hidden", mode==="projects");
+  $("repmode-projects-panel").classList.toggle("hidden", mode!=="projects");
+  if (mode === "projects") initProjectsReportMode();
 }
+$("repmode-projects").addEventListener("click", () => switchReportMode("projects"));
 
 $("btn-apply-custom").addEventListener("click", applyFreeformRange);
 function applyFreeformRange() {
@@ -975,7 +998,7 @@ function buildReport(rd) {
   lastReportRange = rd;
   $("rep-income-list-wrap").classList.add("hidden");
   $("rep-expense-list-wrap").classList.add("hidden");
-  const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
+  const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO && !t.projectId);
   $("rep-range-text").textContent = `טווח: ${rd.label} (${rd.startISO.split("-").reverse().join(".")} - ${rd.endISO.split("-").reverse().join(".")})`;
   const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
@@ -1123,11 +1146,11 @@ $("btn-export-report").addEventListener("click", () => {
 });
 
 function generatePrintReport(rd) {
-  const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO);
+  const txs = STATE.allTransactionsCache.filter(t => t.date >= rd.startISO && t.date <= rd.endISO && !t.projectId);
   const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
   const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
 
-  const before = STATE.allTransactionsCache.filter(t => t.date < rd.startISO);
+  const before = STATE.allTransactionsCache.filter(t => t.date < rd.startISO && !t.projectId);
   const openingBalance = before.reduce((s,t) => s + (t.type==="income" ? t.amount : -t.amount), 0);
   const closingBalance = openingBalance + income - expense;
 
@@ -1171,6 +1194,89 @@ function generatePrintReport(rd) {
       צוות הוועד: בני ארגאו
     </div>
   `;
+}
+
+// ---------- Projects report mode ----------
+async function initProjectsReportMode() {
+  const snap = await getDocs(collection(db, "projects"));
+  const projects = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  STATE.reportProjectsCache = projects;
+  $("report-project-select").innerHTML = projects.length
+    ? projects.map(p => `<option value="${p.id}">${p.title} (${p.status||"בבחינה"})</option>`).join("")
+    : `<option value="">אין פרויקטים עדיין</option>`;
+  $("report-project-select").onchange = () => renderProjectReport($("report-project-select").value);
+  if (projects.length) renderProjectReport(projects[0].id);
+  else $("project-report-content").innerHTML = `<p class="center-note">אין פרויקטים עדיין - ניתן ליצור בכרטיסיית "פרויקטים"</p>`;
+}
+
+function renderGenericChart(canvasId, legendId, labels, data) {
+  const colors = ["#2a78d6","#1baf7a","#eda100","#e34948","#4a3aa7","#e87ba4","#eb6834"];
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+  if (labels.length) {
+    chartInstances[canvasId] = new Chart($(canvasId), {
+      type: "doughnut",
+      data: { labels, datasets: [{ data, backgroundColor: colors, borderColor: "#fff", borderWidth: 2 }] },
+      options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} }
+    });
+  }
+  $(legendId).innerHTML = labels.length ? labels.map((l,i) => `
+    <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("")
+    : `<p class="center-note">אין נתונים</p>`;
+}
+
+function renderProjectReport(projectId) {
+  if (!projectId) { $("project-report-content").innerHTML = ""; return; }
+  const txs = STATE.allTransactionsCache.filter(t => t.projectId === projectId);
+  const incomeTxs = txs.filter(t => t.type === "income");
+  const expenseTxs = txs.filter(t => t.type === "expense").sort((a,b) => a.date.localeCompare(b.date));
+  const income = incomeTxs.reduce((s,t)=>s+t.amount,0);
+  const expense = expenseTxs.reduce((s,t)=>s+t.amount,0);
+
+  const byUnit = {};
+  incomeTxs.forEach(t => {
+    const unit = STATE.units.find(u=>u.id===t.unitId);
+    const label = unit ? `דירה ${unit.number}` : "לא משויך";
+    byUnit[label] = (byUnit[label]||0) + t.amount;
+  });
+  const unitLabels = Object.keys(byUnit).sort((a,b) => (parseInt(a.replace(/\D/g,""))||999) - (parseInt(b.replace(/\D/g,""))||999));
+  const unitData = unitLabels.map(l => byUnit[l]);
+
+  const byCat = {};
+  expenseTxs.forEach(t => byCat[t.category] = (byCat[t.category]||0) + t.amount);
+  const catLabels = Object.keys(byCat);
+  const catData = catLabels.map(l => byCat[l]);
+
+  $("project-report-content").innerHTML = `
+    <div class="metric-grid cols-3" style="margin-top:4px;">
+      <div class="metric"><p class="label">הכנסות</p><p class="value pos">${fmtILS(income)}</p></div>
+      <div class="metric"><p class="label">הוצאות</p><p class="value neg">${fmtILS(expense)}</p></div>
+      <div class="metric"><p class="label">מאזן</p><p class="value">${fmtILS(income-expense)}</p></div>
+    </div>
+    <p style="font-weight:700;font-size:16px;margin:0 0 10px;">הכנסות לפי דירה</p>
+    <div style="position:relative;width:100%;height:200px;margin-bottom:10px;"><canvas id="proj-income-chart"></canvas></div>
+    <div id="proj-income-legend" style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--text-secondary);margin-bottom:20px;"></div>
+    <p style="font-weight:700;font-size:16px;margin:0 0 10px;">התפלגות הוצאות לפי קטגוריה</p>
+    <div style="position:relative;width:100%;height:200px;margin-bottom:10px;"><canvas id="proj-expense-chart"></canvas></div>
+    <div id="proj-expense-legend" style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--text-secondary);margin-bottom:20px;"></div>
+    <p style="font-weight:700;font-size:16px;margin:0 0 10px;">רשימת הוצאות מפורטת</p>
+    <div id="proj-expense-list">
+      ${expenseTxs.length ? expenseTxs.map(t => `
+        <div class="card" style="padding:10px 14px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:start;">
+            <div>
+              <p style="font-size:15px;font-weight:600;margin:0;">${t.category}</p>
+              <p style="font-size:13px;color:var(--text-secondary);margin:2px 0 0;">${t.supplier || "-"}</p>
+            </div>
+            <div style="text-align:left;">
+              <p style="font-size:16px;font-weight:700;margin:0;">${fmtILS(t.amount)}</p>
+              <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date.split("-").reverse().join(".")}</p>
+            </div>
+          </div>
+        </div>`).join("") : `<p class="center-note">אין הוצאות בפרויקט זה</p>`}
+    </div>
+  `;
+  renderGenericChart("proj-income-chart", "proj-income-legend", unitLabels, unitData);
+  renderGenericChart("proj-expense-chart", "proj-expense-legend", catLabels, catData);
 }
 
 // ---------- Projects ----------
@@ -1439,6 +1545,49 @@ $("btn-check-duplicates").addEventListener("click", async () => {
   });
 });
 
+// ---------- Baltam special-levy migration ----------
+$("btn-migrate-baltam").addEventListener("click", async () => {
+  if (!confirm('להעביר את כל נתוני בלת"ם (פיצוץ צנרת מים) לכרטיסיית פרויקט נפרדת? הן יוצאו מחישובי ההכנסות/הוצאות השוטפים.')) return;
+  const btn = $("btn-migrate-baltam");
+  btn.disabled = true;
+  btn.textContent = "מעביר...";
+  try {
+    const projSnap = await getDocs(collection(db, "projects"));
+    let project = projSnap.docs.map(d=>({id:d.id, ...d.data()})).find(p => p.title && p.title.includes('בלת"ם'));
+    let projectId;
+    if (project) {
+      projectId = project.id;
+    } else {
+      const ref = await addDoc(collection(db, "projects"), {
+        title: 'בלת"ם 2024 - גילוי ותיקון פיצוץ צנרת מים ראשי',
+        status: "בוצע", quotes: []
+      });
+      projectId = ref.id;
+    }
+    const allSnap = await getDocs(collection(db, "transactions"));
+    let count = 0;
+    for (const d of allSnap.docs) {
+      const t = d.data();
+      const isBaltamIncome = t.type === "income" && t.category === 'בלת"ם - תיקון צנרת';
+      const isBaltamExpense = t.type === "expense" && t.desc && t.desc.includes('פרויקט בלת"ם');
+      if ((isBaltamIncome || isBaltamExpense) && !t.projectId) {
+        await updateDoc(doc(db, "transactions", d.id), { projectId });
+        count++;
+      }
+    }
+    await computeAllTimeBalance();
+    if (STATE.currentYear) await loadTransactions(STATE.currentYear);
+    $("baltam-migrate-status").innerHTML = count
+      ? `<span style="color:var(--green);"><i class="ti ti-check"></i> הועברו ${count} תנועות לפרויקט "${(project&&project.title)||'בלת"ם'}". הדשבורד עודכן.</span>`
+      : `<span style="color:var(--text-muted);">לא נמצאו תנועות בלת"ם חדשות להעברה (ייתכן שכבר הועברו בעבר).</span>`;
+  } catch (e) {
+    alert("שגיאה: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "בצע העברה";
+  }
+});
+
 // ---------- Public view ----------
 const chartInstances = {};
 function renderExpenseChart(canvasId, legendId, expenseTxs) {
@@ -1466,12 +1615,13 @@ async function renderPublicView() {
   const q = query(collection(db, "transactions"), where("year", "==", year));
   const snap = await getDocs(q);
   const txs = snap.docs.map(d => d.data());
-  const income = txs.filter(t=>t.type==="income").reduce((s,t)=>s+t.amount,0);
-  const expense = txs.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amount,0);
+  const income = txs.filter(t=>t.type==="income" && !t.projectId).reduce((s,t)=>s+t.amount,0);
+  const expense = txs.filter(t=>t.type==="expense" && !t.projectId).reduce((s,t)=>s+t.amount,0);
   const allTimeSnap = await getDocs(collection(db, "transactions"));
   let allIncome = 0, allExpense = 0;
   allTimeSnap.docs.forEach(d => {
     const t = d.data();
+    if (t.projectId) return;
     if (t.type === "income") allIncome += (t.amount||0); else allExpense += (t.amount||0);
   });
   $("pub-bname").textContent = STATE.settings.name;
@@ -1483,7 +1633,7 @@ async function renderPublicView() {
   $("pub-bar-expense").style.width = (expense/total*100)+"%";
   $("pub-income-txt").textContent = "הכנסות " + fmtILS(income);
   $("pub-expense-txt").textContent = "הוצאות " + fmtILS(expense);
-  renderExpenseChart("pub-chart", "pub-legend", txs.filter(t => t.type === "expense"));
+  renderExpenseChart("pub-chart", "pub-legend", txs.filter(t => t.type === "expense" && !t.projectId));
 }
 
 // ---------- Resident view ----------
@@ -1504,12 +1654,12 @@ function renderResidentView() {
     </div>`).join("") : `<p class="center-note">אין תשלומים רשומים עדיין</p>`;
 
   // Building-wide status report (income/expenses/balance/chart) - no receipts, no other units' personal info
-  const income = STATE.transactions.filter(t=>t.type==="income").reduce((s,t)=>s+(t.amount||0),0);
-  const expense = STATE.transactions.filter(t=>t.type==="expense").reduce((s,t)=>s+(t.amount||0),0);
+  const income = STATE.transactions.filter(t=>t.type==="income" && !t.projectId).reduce((s,t)=>s+(t.amount||0),0);
+  const expense = STATE.transactions.filter(t=>t.type==="expense" && !t.projectId).reduce((s,t)=>s+(t.amount||0),0);
   $("res-b-income").textContent = fmtILS(income);
   $("res-b-expense").textContent = fmtILS(expense);
   $("res-b-balance").textContent = fmtILS(STATE.allTimeBalance);
-  renderExpenseChart("res-chart", "res-legend", STATE.transactions.filter(t => t.type === "expense"));
+  renderExpenseChart("res-chart", "res-legend", STATE.transactions.filter(t => t.type === "expense" && !t.projectId));
 }
 
 // wire dashboard shortcut buttons
