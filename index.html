@@ -445,14 +445,21 @@ async function computeAllTimeBalance() {
     }
   });
   STATE.allTimeBalance = income - expense;
-  const nowYear = new Date().getFullYear();
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth(); // 0 = January
   STATE.unitDebts = {};
   STATE.units.forEach(u => {
     // use whichever is earlier: the unit's recorded creation year, or the earliest
     // year it actually has payments for (covers manually-backfilled years like 2022)
     const startYear = Math.min(u.createdYear || 2023, earliestYearByUnit[u.id] || 9999);
-    const yearsActive = Math.max(1, nowYear - startYear + 1);
-    const expected = STATE.settings.fee * 12 * yearsActive;
+    // count only months that have actually elapsed: full 12 for past years,
+    // but only the months-so-far for the current (still in progress) year
+    let expectedMonths = 0;
+    for (let y = startYear; y <= nowYear; y++) {
+      expectedMonths += (y < nowYear) ? 12 : (nowMonth + 1);
+    }
+    const expected = STATE.settings.fee * expectedMonths;
     const paid = paidByUnit[u.id] || 0;
     const adjustment = u.manualDebtAdjustment || 0;
     STATE.unitDebts[u.id] = { paid, expected, adjustment, debt: expected - paid + adjustment };
@@ -695,11 +702,11 @@ function renderUnitCumulativeCard(unitId) {
       <p style="font-weight:700;font-size:15px;margin:0 0 8px;">יתרת חוב מצטברת (הערכה, כל השנים)</p>
       <table style="width:100%;font-size:14px;border-collapse:collapse;">
         <tr><td style="color:var(--text-secondary);padding:3px 0;">סה"כ שולם אי-פעם</td><td style="text-align:left;">${fmtILS(cum.paid)}</td></tr>
-        <tr><td style="color:var(--text-secondary);padding:3px 0;">צפי (${STATE.settings.fee}₪ x 12 חודשים x שנות פעילות)</td><td style="text-align:left;">${fmtILS(cum.expected)}</td></tr>
+        <tr><td style="color:var(--text-secondary);padding:3px 0;">צפי (${STATE.settings.fee}₪ לחודש, לפי חודשים שחלפו)</td><td style="text-align:left;">${fmtILS(cum.expected)}</td></tr>
         <tr><td style="color:var(--text-secondary);padding:3px 0;">התאמה ידנית</td><td style="text-align:left;">${fmtILS(cum.adjustment)}</td></tr>
         <tr style="border-top:1px solid var(--border-strong);"><td style="padding:6px 0 0;font-weight:700;">יתרת חוב</td><td style="text-align:left;padding:6px 0 0;font-weight:700;color:${cum.debt>0?"var(--red)":"var(--green)"};">${fmtILS(cum.debt)}</td></tr>
       </table>
-      <p style="font-size:13px;color:var(--text-muted);margin:8px 0 10px;">זו הערכה שמניחה 12 חודשי תשלום בכל שנה מאז שהדירה נוצרה במערכת (${unit.createdYear||2023}). אם הדירה הייתה ריקה חלק מהזמן, השתמש ב"התאמה ידנית" (מספר שלילי מקטין את החוב) כדי לתקן.</p>
+      <p style="font-size:13px;color:var(--text-muted);margin:8px 0 10px;">זו הערכה שמניחה תשלום מלא בכל חודש שכבר עבר מאז שהדירה נוצרה במערכת (${unit.createdYear||2023}) - כולל רק חודשים שכבר חלפו בשנה הנוכחית, לא כל 12 החודשים מראש. אם הדירה הייתה ריקה חלק מהזמן, השתמש ב"התאמה ידנית" (מספר שלילי מקטין את החוב) כדי לתקן.</p>
       <button class="btn ghost" id="btn-edit-debt-adj">ערוך התאמה ידנית</button>
     </div>`;
   $("btn-edit-debt-adj").addEventListener("click", async () => {
