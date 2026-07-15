@@ -912,20 +912,7 @@ $("btn-print-receipt").addEventListener("click", () => {
   const unit = STATE.units.find(u => u.id === tx.unitId);
   const sigHtml = STATE.settings.signatureDataUrl ? `<img src="${STATE.settings.signatureDataUrl}">` : "";
   const receiptNum = $("rc-num").textContent;
-
-  let itemsHtml;
-  if (tx.category === "דמי ועד" && STATE.settings.fee) {
-    const fee = STATE.settings.fee;
-    const fullMonths = Math.floor(tx.amount / fee);
-    const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
-    const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
-    const lines = [];
-    for (let i = 0; i < fullMonths; i++) lines.push(`דמי ועד ${HEB_MONTHS[(startMonth+i)%12]}: ${fmtILS(fee)}`);
-    if (remainder > 0) lines.push(`מקדמה לחודש הבא: ${fmtILS(remainder)}`);
-    itemsHtml = (lines.length ? lines : [`${tx.category}: ${fmtILS(tx.amount)}`]).map(l => `<p class="pr-receipt-item">- ${l}</p>`).join("");
-  } else {
-    itemsHtml = `<p class="pr-receipt-item">- ${tx.category}: ${fmtILS(tx.amount)}</p>`;
-  }
+  const itemsHtml = buildReceiptItemLines(tx).map(l => `<p class="pr-receipt-item">- ${l}</p>`).join("");
 
   $("print-report").innerHTML = `
     <div class="pr-receipt-text">
@@ -946,6 +933,95 @@ $("btn-print-receipt").addEventListener("click", () => {
   `;
   triggerPrint(`קבלה-${receiptNum}`);
 });
+function buildReceiptItemLines(tx) {
+  if (tx.category === "דמי ועד" && STATE.settings.fee) {
+    const fee = STATE.settings.fee;
+    const fullMonths = Math.floor(tx.amount / fee);
+    const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
+    const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
+    const lines = [];
+    for (let i = 0; i < fullMonths; i++) lines.push(`דמי ועד ${HEB_MONTHS[(startMonth+i)%12]}: ${fmtILS(fee)}`);
+    if (remainder > 0) lines.push(`מקדמה לחודש הבא: ${fmtILS(remainder)}`);
+    return lines.length ? lines : [`${tx.category}: ${fmtILS(tx.amount)}`];
+  }
+  return [`${tx.category}: ${fmtILS(tx.amount)}`];
+}
+
+function buildReceiptImage(tx, unit, receiptNum, itemLines) {
+  const W = 700, marginX = 50;
+  const rowH = { title:36, sub:24, num:34, field:28, item:24, total:36, thanks:26 };
+  let h = 50 + rowH.title + rowH.sub + rowH.num + (rowH.field*4) + 16 + (rowH.item*itemLines.length) + 16 + rowH.total + 20 + (rowH.thanks*2) + 40;
+  const hasSig = !!STATE.settings.signatureDataUrl;
+  if (hasSig) h += 100;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, W, h);
+  ctx.direction = "rtl";
+
+  let y = 55;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#111111";
+  ctx.font = "bold 26px Arial, sans-serif";
+  ctx.fillText(STATE.settings.name || "ועד בית", W/2, y); y += rowH.title;
+  ctx.font = "16px Arial, sans-serif";
+  ctx.fillStyle = "#555555";
+  ctx.fillText(STATE.settings.address || "", W/2, y); y += rowH.sub;
+  ctx.font = "italic 14px Arial, sans-serif";
+  ctx.fillStyle = "#777777";
+  ctx.fillText(`קבלה מס' ${receiptNum}`, W/2, y);
+  y += 16;
+  ctx.strokeStyle = "#cccccc";
+  ctx.setLineDash([4,4]);
+  ctx.beginPath(); ctx.moveTo(marginX, y); ctx.lineTo(W-marginX, y); ctx.stroke();
+  ctx.setLineDash([]);
+  y += rowH.num - 10;
+
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#111111";
+  ctx.font = "bold 17px Arial, sans-serif";
+  [`דירה: ${unit.number}`, `שם הדייר: ${unit.currentName}`, `תאריך: ${tx.date.split("-").reverse().join(".")}`, `אופן תשלום: ${tx.method}`]
+    .forEach(line => { ctx.fillText(line, W-marginX, y); y += rowH.field; });
+  y += 6;
+
+  ctx.font = "16px Arial, sans-serif";
+  ctx.fillStyle = "#222222";
+  itemLines.forEach(line => { ctx.fillText("- " + line, W-marginX, y); y += rowH.item; });
+  y += 10;
+
+  ctx.strokeStyle = "#333333";
+  ctx.beginPath(); ctx.moveTo(marginX, y); ctx.lineTo(W-marginX, y); ctx.stroke();
+  y += rowH.total - 10;
+  ctx.font = "bold 22px Arial, sans-serif";
+  ctx.fillStyle = "#000000";
+  ctx.fillText(`סה"כ שולם: ${fmtILS(tx.amount)}`, W-marginX, y);
+  y += rowH.total;
+
+  ctx.textAlign = "center";
+  ctx.font = "18px Arial, sans-serif";
+  ctx.fillStyle = "#111111";
+  ctx.fillText("תודה על התשלום! 🙏", W/2, y); y += rowH.thanks;
+  ctx.fillText("בברכה, ועד הבית", W/2, y); y += rowH.thanks;
+
+  return new Promise((resolve) => {
+    if (hasSig) {
+      const img = new Image();
+      img.onload = () => {
+        const sigW = 160, sigH = sigW * (img.height / img.width);
+        ctx.drawImage(img, W/2 - sigW/2, y, sigW, sigH);
+        resolve(canvas);
+      };
+      img.onerror = () => resolve(canvas);
+      img.src = STATE.settings.signatureDataUrl;
+    } else {
+      resolve(canvas);
+    }
+  });
+}
+
 $("btn-share-whatsapp").addEventListener("click", async () => {
   try {
     const tx = STATE.pendingReceipt;
@@ -953,28 +1029,37 @@ $("btn-share-whatsapp").addEventListener("click", async () => {
     if (!unit) { alert("שגיאה: לא נמצאה דירה משויכת לקבלה זו."); return; }
     const phone = (unit.currentPhone || "").replace(/\D/g,"");
     if (!phone) { alert(`לדירה ${unit.number} (${unit.currentName||""}) אין מספר טלפון שמור. הוסף טלפון בהגדרות → ניהול דירות ודיירים כדי לאפשר שיתוף בוואטסאפ.`); return; }
+
     const receiptNum = $("rc-num").textContent;
-    let itemsText;
-    if (tx.category === "דמי ועד" && STATE.settings.fee) {
-      const fee = STATE.settings.fee;
-      const fullMonths = Math.floor(tx.amount / fee);
-      const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
-      const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
-      const lines = [];
-      for (let i = 0; i < fullMonths; i++) lines.push(`- דמי ועד ${HEB_MONTHS[(startMonth+i)%12]}: ${fmtILS(fee)}`);
-      if (remainder > 0) lines.push(`- מקדמה לחודש הבא: ${fmtILS(remainder)}`);
-      itemsText = lines.length ? lines.join("\n") : `- ${tx.category}: ${fmtILS(tx.amount)}`;
-    } else {
-      itemsText = `- ${tx.category}: ${fmtILS(tx.amount)}`;
-    }
-    const msg = `*${STATE.settings.name}*\n${STATE.settings.address || ""}\n_קבלה מס' ${receiptNum}_\n\n*דירה:* ${unit.number}\n*שם הדייר:* ${unit.currentName}\n*תאריך:* ${tx.date.split("-").reverse().join(".")}\n*אופן תשלום:* ${tx.method}\n\n${itemsText}\n\n*סה"כ שולם: ${fmtILS(tx.amount)}*\n\nתודה על התשלום! 🙏\nבברכה, ועד הבית`;
-    const waNumber = phone.startsWith("0") ? "972"+phone.slice(1) : phone;
-    const url = `https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank");
-    if (tx.id) await updateDoc(doc(db, "transactions", tx.id), { sharedWhatsapp: true });
-    $("btn-share-whatsapp").classList.add("hidden");
-    $("rc-sig-block").classList.add("hidden");
-    $("rc-sent-badge").classList.remove("hidden");
+    const itemLines = buildReceiptItemLines(tx);
+    const canvas = await buildReceiptImage(tx, unit, receiptNum, itemLines);
+
+    const markShared = async () => {
+      if (tx.id) await updateDoc(doc(db, "transactions", tx.id), { sharedWhatsapp: true });
+      $("btn-share-whatsapp").classList.add("hidden");
+      $("rc-sig-block").classList.add("hidden");
+      $("rc-sent-badge").classList.remove("hidden");
+    };
+
+    canvas.toBlob(async (blob) => {
+      const file = new File([blob], `קבלה-${receiptNum}.png`, { type: "image/png" });
+      const caption = `קבלה מ${STATE.settings.name} - דירה ${unit.number} - ${fmtILS(tx.amount)}`;
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: `קבלה ${receiptNum}`, text: caption });
+          await markShared();
+          return;
+        } catch (shareErr) {
+          if (shareErr && shareErr.name === "AbortError") return; // user cancelled the share sheet
+          // otherwise fall through to text-link fallback below
+        }
+      }
+      // Fallback for browsers without file-sharing support: open WhatsApp with formatted text
+      const msg = `*${STATE.settings.name}*\n${STATE.settings.address || ""}\n_קבלה מס' ${receiptNum}_\n\n*דירה:* ${unit.number}\n*שם הדייר:* ${unit.currentName}\n*תאריך:* ${tx.date.split("-").reverse().join(".")}\n*אופן תשלום:* ${tx.method}\n\n${itemLines.map(l=>"- "+l).join("\n")}\n\n*סה"כ שולם: ${fmtILS(tx.amount)}*\n\nתודה על התשלום! 🙏\nבברכה, ועד הבית`;
+      const waNumber = phone.startsWith("0") ? "972"+phone.slice(1) : phone;
+      window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, "_blank");
+      await markShared();
+    }, "image/png");
   } catch (e) {
     alert("שגיאה בשיתוף: " + e.message);
   }
@@ -1275,16 +1360,38 @@ function renderChartToImage(labels, data) {
 }
 
 function triggerPrint(titleForFile) {
-  const originalTitle = document.title;
-  document.title = titleForFile;
-  document.body.classList.add("printing-report");
-  const cleanup = () => {
-    document.body.classList.remove("printing-report");
-    document.title = originalTitle;
-    window.removeEventListener("afterprint", cleanup);
-  };
-  window.addEventListener("afterprint", cleanup);
-  setTimeout(() => { window.print(); setTimeout(cleanup, 1000); }, 200);
+  const content = $("print-report").innerHTML;
+  const printCss = `
+    *{box-sizing:border-box;}
+    body{margin:0;padding:24px;font-family:"Assistant","Segoe UI",Arial,sans-serif;direction:rtl;color:#000;background:#fff;}
+    h1{font-size:22px;margin:0 0 4px;}
+    h2{font-size:15px;font-weight:400;color:#444;margin:0 0 18px;}
+    .pr-period{font-size:14px;font-weight:600;margin-bottom:18px;border-bottom:1px solid #ccc;padding-bottom:10px;}
+    table.pr-summary{width:100%;border-collapse:collapse;margin-bottom:20px;}
+    table.pr-summary td{padding:8px;border:1px solid #ccc;font-size:14px;}
+    table.pr-summary td.label{color:#555;width:50%;}
+    table.pr-summary td.val{font-weight:700;text-align:left;}
+    .pr-chart-img{max-width:320px;display:block;margin:0 auto 20px;}
+    .pr-sign{margin-top:40px;font-size:14px;line-height:1.8;}
+    .pr-receipt-text{max-width:420px;margin:0 auto;font-size:14px;line-height:1.7;}
+    .pr-rt-name{font-size:19px;font-weight:700;text-align:center;margin:0 0 2px;}
+    .pr-rt-addr{font-size:13px;color:#555;text-align:center;margin:0 0 6px;}
+    .pr-rt-num{font-size:13px;color:#777;font-style:italic;text-align:center;margin:0 0 20px;padding-bottom:14px;border-bottom:1px dashed #999;}
+    .pr-rt-fields p{margin:0 0 6px;}
+    .pr-rt-items{margin:16px 0;}
+    .pr-rt-item{margin:0 0 4px;}
+    .pr-rt-total{font-size:17px;margin:16px 0;padding-top:10px;border-top:1px solid #333;}
+    .pr-rt-thanks{margin:20px 0 0;}
+    .pr-receipt-sig{margin-top:30px;}
+    .pr-receipt-sig img{max-height:60px;}
+    .line-item{display:flex;justify-content:space-between;font-size:13px;padding:2px 0;}
+  `;
+  const win = window.open("", "_blank");
+  if (!win) { alert("הדפדפן חסם את חלון ההדפסה. יש לאשר חלונות קופצים באתר זה ולנסות שוב."); return; }
+  win.document.open();
+  win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>${titleForFile}</title><style>${printCss}</style></head><body>${content}</body></html>`);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 350);
 }
 
 // ---------- Projects report mode ----------
