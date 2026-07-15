@@ -200,6 +200,7 @@
           <div class="sig-box" id="rc-sig-display"></div>
         </div>
         <button class="btn whatsapp" id="btn-share-whatsapp"><i class="ti ti-brand-whatsapp"></i> שתף קבלה חתומה בוואטסאפ</button>
+        <button class="btn" id="btn-print-receipt" style="margin-top:10px;"><i class="ti ti-file-download"></i> הפקת קבלה PDF</button>
         <div class="badge success hidden" id="rc-sent-badge" style="width:100%;text-align:center;padding:10px;margin-top:10px;">
           <i class="ti ti-check"></i> נשלחה בוואטסאפ
         </div>
@@ -905,6 +906,46 @@ function openReceipt(tx) {
 }
 $("btn-edit-sig").addEventListener("click", () => showView("view-settings"));
 $("btn-receipt-done").addEventListener("click", () => showView("view-dashboard"));
+$("btn-print-receipt").addEventListener("click", () => {
+  const tx = STATE.pendingReceipt;
+  if (!tx) { alert("אין קבלה פעילה להפקה."); return; }
+  const unit = STATE.units.find(u => u.id === tx.unitId);
+  const sigHtml = STATE.settings.signatureDataUrl ? `<img src="${STATE.settings.signatureDataUrl}">` : "";
+  const receiptNum = $("rc-num").textContent;
+
+  let itemsHtml;
+  if (tx.category === "דמי ועד" && STATE.settings.fee) {
+    const fee = STATE.settings.fee;
+    const fullMonths = Math.floor(tx.amount / fee);
+    const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
+    const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
+    const lines = [];
+    for (let i = 0; i < fullMonths; i++) lines.push(`דמי ועד ${HEB_MONTHS[(startMonth+i)%12]}: ${fmtILS(fee)}`);
+    if (remainder > 0) lines.push(`מקדמה לחודש הבא: ${fmtILS(remainder)}`);
+    itemsHtml = (lines.length ? lines : [`${tx.category}: ${fmtILS(tx.amount)}`]).map(l => `<p class="pr-receipt-item">- ${l}</p>`).join("");
+  } else {
+    itemsHtml = `<p class="pr-receipt-item">- ${tx.category}: ${fmtILS(tx.amount)}</p>`;
+  }
+
+  $("print-report").innerHTML = `
+    <div class="pr-receipt-text">
+      <p class="pr-rt-name">${STATE.settings.name || "ועד בית"}</p>
+      <p class="pr-rt-addr">${STATE.settings.address || ""}</p>
+      <p class="pr-rt-num">קבלה מס' ${receiptNum}</p>
+      <div class="pr-rt-fields">
+        <p><b>דירה:</b> ${unit ? unit.number : ""}</p>
+        <p><b>שם הדייר:</b> ${unit ? unit.currentName : ""}</p>
+        <p><b>תאריך:</b> ${$("rc-date").textContent}</p>
+        <p><b>אופן תשלום:</b> ${$("rc-method").textContent}</p>
+      </div>
+      <div class="pr-rt-items">${itemsHtml}</div>
+      <p class="pr-rt-total"><b>סה"כ שולם: ${$("rc-total").textContent}</b></p>
+      <p class="pr-rt-thanks">תודה על התשלום! 🙏<br>בברכה, ועד הבית</p>
+      ${sigHtml ? `<div class="pr-receipt-sig"><p style="font-size:13px;color:#555;margin:0 0 6px;">חתימת הוועד</p>${sigHtml}</div>` : ""}
+    </div>
+  `;
+  triggerPrint(`קבלה-${receiptNum}`);
+});
 $("btn-share-whatsapp").addEventListener("click", async () => {
   try {
     const tx = STATE.pendingReceipt;
