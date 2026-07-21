@@ -1362,6 +1362,7 @@ function renderChartToImage(labels, data) {
 function triggerPrint(titleForFile) {
   const content = $("print-report").innerHTML;
   const printCss = `
+    @page{margin:12mm;}
     *{box-sizing:border-box;}
     body{margin:0;padding:24px;font-family:"Assistant","Segoe UI",Arial,sans-serif;direction:rtl;color:#000;background:#fff;}
     h1{font-size:22px;margin:0 0 4px;}
@@ -1385,11 +1386,22 @@ function triggerPrint(titleForFile) {
     .pr-receipt-sig{margin-top:30px;}
     .pr-receipt-sig img{max-height:60px;}
     .line-item{display:flex;justify-content:space-between;font-size:13px;padding:2px 0;}
+    .no-print-bar{position:sticky;top:0;background:#f4f6f8;padding:12px;margin:-24px -24px 20px;display:flex;gap:10px;border-bottom:1px solid #ddd;}
+    .no-print-bar button{flex:1;padding:12px;font-size:15px;font-weight:600;border-radius:8px;border:none;cursor:pointer;}
+    .no-print-bar .btn-close{background:#e5e7eb;color:#111;}
+    .no-print-bar .btn-print-again{background:#2563eb;color:#fff;}
+    @media print{ .no-print-bar{display:none !important;} }
   `;
   const win = window.open("", "_blank");
   if (!win) { alert("הדפדפן חסם את חלון ההדפסה. יש לאשר חלונות קופצים באתר זה ולנסות שוב."); return; }
   win.document.open();
-  win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>${titleForFile}</title><style>${printCss}</style></head><body>${content}</body></html>`);
+  win.document.write(`<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>${titleForFile}</title><style>${printCss}</style></head><body>
+    <div class="no-print-bar">
+      <button class="btn-close" onclick="window.close()">סגור</button>
+      <button class="btn-print-again" onclick="window.print()">הדפס / שתף שוב</button>
+    </div>
+    ${content}
+  </body></html>`);
   win.document.close();
   setTimeout(() => { win.focus(); win.print(); }, 350);
 }
