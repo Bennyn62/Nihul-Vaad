@@ -1545,7 +1545,13 @@ $("btn-export-project-report").addEventListener("click", () => {
 async function renderProjects() {
   const snap = await getDocs(collection(db, "projects"));
   const list = snap.docs.map(d => ({id:d.id, ...d.data()}));
-  $("projects-list").innerHTML = list.length ? list.map(p => `
+  $("projects-list").innerHTML = list.length ? list.map(p => {
+    const paidUnitIds = new Set(STATE.allTransactionsCache.filter(t => t.projectId === p.id && t.type === "income").map(t => t.unitId));
+    const perUnitTxTotal = {};
+    STATE.allTransactionsCache.filter(t => t.projectId === p.id && t.type === "income").forEach(t => {
+      perUnitTxTotal[t.unitId] = (perUnitTxTotal[t.unitId]||0) + t.amount;
+    });
+    return `
     <div class="card">
       <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
         <p style="font-weight:700;font-size:16px;margin:0;">${p.title}</p>
@@ -1560,17 +1566,54 @@ async function renderProjects() {
                 ${q.items.map(it => `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);padding:2px 0;"><span>${it.desc}</span><span>${fmtILS(it.price)}</span></div>`).join("")}
               </div>` : ""}
             <p style="font-size:16px;font-weight:700;margin:0 0 6px;border-top:${(q.items||[]).length ? "1px solid var(--border-strong);padding-top:4px;" : "none;"}">${fmtILS(q.total)}</p>
-            <button data-del-quote="${p.id}|${i}" style="width:auto;padding:2px 8px;font-size:12px;color:var(--red);border:none;background:none;">מחק</button>
+            <div style="display:flex;gap:10px;">
+              <button data-edit-quote="${p.id}|${i}" style="width:auto;padding:2px 8px;font-size:12px;color:var(--blue);border:none;background:none;">ערוך</button>
+              <button data-del-quote="${p.id}|${i}" style="width:auto;padding:2px 8px;font-size:12px;color:var(--red);border:none;background:none;">מחק</button>
+            </div>
           </div>`).join("")}
       </div>
-      <div style="display:flex;gap:8px;">
+      <div style="display:flex;gap:8px;margin-bottom:16px;">
         <button class="btn ghost" data-add-quote="${p.id}" style="width:auto;padding:6px 12px;font-size:13px;">+ הצעת מחיר</button>
         <button class="btn ghost" data-del-project="${p.id}" style="width:auto;padding:6px 12px;font-size:13px;color:var(--red);">מחק פרויקט</button>
       </div>
-    </div>`).join("") : `<p class="center-note">אין פרויקטים עדיין</p>`;
+
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:14px;">
+        <p style="font-weight:700;font-size:14px;margin:0 0 8px;">משימות ביצוע</p>
+        ${(p.tasks||[]).length ? (p.tasks||[]).map((t,i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface-2);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
+            <span style="font-size:13px;">${t.desc}</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span class="badge ${t.status==='הושלם'?'success':(t.status==='בביצוע'?'info':'warning')}" data-task-status="${p.id}|${i}" style="cursor:pointer;">${t.status||'ממתין'}</span>
+              <button data-del-task="${p.id}|${i}" style="border:none;background:none;color:var(--red);font-size:16px;padding:0 4px;">×</button>
+            </div>
+          </div>`).join("") : `<p class="center-note" style="padding:8px 0;">אין משימות עדיין</p>`}
+        <button class="btn ghost" data-add-task="${p.id}" style="width:auto;padding:5px 10px;font-size:13px;margin-top:4px;">+ הוסף משימה</button>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:12px;">
+        <p style="font-weight:700;font-size:14px;margin:0 0 8px;">תשלומי דיירים ${p.expectedPerUnit ? `(צפי ${fmtILS(p.expectedPerUnit)} לדירה)` : ""}</p>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px;">
+          ${STATE.units.map(u => {
+            const paid = paidUnitIds.has(u.id);
+            const paidAmt = perUnitTxTotal[u.id] || 0;
+            return `<div data-record-payment="${p.id}|${u.id}" style="cursor:pointer;text-align:center;background:${paid?"var(--green-bg)":"var(--surface-2)"};border-radius:8px;padding:6px 4px;">
+              <p style="font-size:12px;font-weight:700;margin:0;">${u.number}</p>
+              <p style="font-size:11px;color:${paid?"var(--green)":"var(--text-muted)"};margin:2px 0 0;">${paid?fmtILS(paidAmt):"לא שולם"}</p>
+            </div>`;
+          }).join("")}
+        </div>
+        <p style="font-size:12px;color:var(--text-muted);margin:0;">לחץ על דירה כדי לרשום תשלום</p>
+      </div>
+    </div>`;
+  }).join("") : `<p class="center-note">אין פרויקטים עדיין</p>`;
 
   $("projects-list").querySelectorAll("[data-add-quote]").forEach(btn =>
     btn.addEventListener("click", () => addQuoteToProject(btn.dataset.addQuote, list)));
+  $("projects-list").querySelectorAll("[data-edit-quote]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const [projectId, idx] = btn.dataset.editQuote.split("|");
+      editQuoteInProject(projectId, parseInt(idx), list);
+    }));
   $("projects-list").querySelectorAll("[data-del-quote]").forEach(btn =>
     btn.addEventListener("click", () => {
       const [projectId, idx] = btn.dataset.delQuote.split("|");
@@ -1590,6 +1633,64 @@ async function renderProjects() {
       await updateDoc(doc(db, "projects", el.dataset.status), { status: next });
       renderProjects();
     }));
+  $("projects-list").querySelectorAll("[data-add-task]").forEach(btn =>
+    btn.addEventListener("click", () => addTaskToProject(btn.dataset.addTask, list)));
+  $("projects-list").querySelectorAll("[data-task-status]").forEach(el =>
+    el.addEventListener("click", async () => {
+      const [projectId, idx] = el.dataset.taskStatus.split("|");
+      const project = list.find(p => p.id === projectId);
+      const tasks = [...(project.tasks||[])];
+      const opts = ["ממתין", "בביצוע", "הושלם"];
+      const cur = opts.indexOf(tasks[idx].status || "ממתין");
+      tasks[idx] = { ...tasks[idx], status: opts[(cur+1) % opts.length] };
+      await updateDoc(doc(db, "projects", projectId), { tasks });
+      renderProjects();
+    }));
+  $("projects-list").querySelectorAll("[data-del-task]").forEach(btn =>
+    btn.addEventListener("click", async () => {
+      const [projectId, idx] = btn.dataset.delTask.split("|");
+      const project = list.find(p => p.id === projectId);
+      const tasks = (project.tasks||[]).filter((_,i) => i !== parseInt(idx));
+      await updateDoc(doc(db, "projects", projectId), { tasks });
+      renderProjects();
+    }));
+  $("projects-list").querySelectorAll("[data-record-payment]").forEach(el =>
+    el.addEventListener("click", () => {
+      const [projectId, unitId] = el.dataset.recordPayment.split("|");
+      recordProjectPayment(projectId, unitId, list);
+    }));
+}
+
+async function addTaskToProject(projectId, list) {
+  const desc = prompt("תיאור המשימה (למשל: צביעת קיר צפוני):");
+  if (!desc) return;
+  const project = list.find(p => p.id === projectId);
+  const tasks = [...(project.tasks||[]), { desc, status: "ממתין" }];
+  await updateDoc(doc(db, "projects", projectId), { tasks });
+  renderProjects();
+}
+
+async function recordProjectPayment(projectId, unitId, list) {
+  const unit = STATE.units.find(u => u.id === unitId);
+  const project = list.find(p => p.id === projectId);
+  const existing = STATE.allTransactionsCache.filter(t => t.projectId === projectId && t.unitId === unitId && t.type === "income");
+  if (existing.length) {
+    if (!confirm(`דירה ${unit.number} כבר שילמה ${fmtILS(existing.reduce((s,t)=>s+t.amount,0))} לפרויקט זה. להוסיף תשלום נוסף?`)) return;
+  }
+  const amountStr = prompt(`סכום ששולם על ידי דירה ${unit.number}:`, String(project.expectedPerUnit || ""));
+  if (amountStr === null) return;
+  const amount = parseFloat(amountStr);
+  if (isNaN(amount) || amount <= 0) { alert("סכום לא תקין"); return; }
+  const dateStr = prompt("תאריך תשלום (YYYY-MM-DD):", todayISO());
+  if (dateStr === null) return;
+  const tx = {
+    type: "income", unitId, category: project.title, amount,
+    method: "לא צוין", date: dateStr, year: parseInt(dateStr.slice(0,4)),
+    projectId, createdAt: Date.now(), note: `תשלום עבור פרויקט: ${project.title}`
+  };
+  await saveTransaction(tx);
+  await computeAllTimeBalance();
+  renderProjects();
 }
 async function addQuoteToProject(projectId, list) {
   const name = prompt('שם ההצעה (למשל "הצעה 1" או שם הקבלן):');
@@ -1613,6 +1714,31 @@ async function addQuoteToProject(projectId, list) {
   await updateDoc(doc(db, "projects", projectId), { quotes });
   renderProjects();
 }
+async function editQuoteInProject(projectId, idx, list) {
+  const project = list.find(p => p.id === projectId);
+  const quote = project.quotes[idx];
+  const name = prompt("שם ההצעה:", quote.name);
+  if (name === null) return;
+  const currentItemsStr = (quote.items||[]).map(it => `${it.desc}=${it.price}`).join(", ");
+  const itemsRaw = prompt('פריטים בפורמט "תיאור=מחיר", מופרדים בפסיק:', currentItemsStr);
+  const items = [];
+  let total = 0;
+  if (itemsRaw) {
+    itemsRaw.split(",").forEach(part => {
+      const [desc, price] = part.split("=").map(s => s.trim());
+      const p = parseFloat(price);
+      if (desc && !isNaN(p)) { items.push({ desc, price: p }); total += p; }
+    });
+  }
+  if (!items.length) {
+    const totalStr = prompt('סה"כ להצעה (₪):', String(quote.total||0));
+    total = parseFloat(totalStr) || 0;
+  }
+  const quotes = [...project.quotes];
+  quotes[idx] = { name, items, total };
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
+}
 async function deleteQuoteFromProject(projectId, idx, list) {
   const project = list.find(p => p.id === projectId);
   const quotes = (project.quotes || []).filter((_, i) => i !== idx);
@@ -1622,7 +1748,9 @@ async function deleteQuoteFromProject(projectId, idx, list) {
 $("btn-new-project").addEventListener("click", async () => {
   const title = prompt("שם הפרויקט:");
   if (!title) return;
-  await addDoc(collection(db, "projects"), { title, quotes: [], status: "בבחינה" });
+  const expectedStr = prompt('סכום צפוי לגבייה מכל דירה (₪) - אפשר להשאיר ריק אם לא רלוונטי:', "");
+  const expectedPerUnit = expectedStr ? parseFloat(expectedStr) || 0 : 0;
+  await addDoc(collection(db, "projects"), { title, quotes: [], status: "בבחינה", tasks: [], expectedPerUnit });
   renderProjects();
 });
 
