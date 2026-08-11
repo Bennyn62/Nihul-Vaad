@@ -49,39 +49,6 @@
           <button class="btn primary" id="btn-resident-login">כניסה</button>
         </div>
       </div>
-
-      <button class="btn ghost" id="btn-show-public">צפייה בסיכום כללי (ללא התחברות) ></button>
-    </section>
-
-    <!-- ========== מסך ציבורי ========== -->
-    <section id="view-public" class="hidden">
-      <div class="receipt" id="public-summary-box">
-        <div class="rhead">
-          <p class="bname" id="pub-bname">ועד בית</p>
-          <p class="baddr" id="pub-baddr"></p>
-        </div>
-        <div class="metric-grid">
-          <div class="metric"><p class="label">יתרת קופה</p><p class="value" id="pub-balance">-</p></div>
-          <div class="metric"><p class="label">שנה נוכחית</p><p class="value" id="pub-year">-</p></div>
-        </div>
-        <div style="margin-bottom:14px;">
-          <p style="font-size:14px;color:var(--text-secondary);margin:0 0 8px;">הכנסות מול הוצאות</p>
-          <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--surface-2);">
-            <div id="pub-bar-income" style="background:var(--green);"></div>
-            <div id="pub-bar-expense" style="background:var(--red);"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);margin-top:6px;">
-            <span id="pub-income-txt"></span>
-            <span id="pub-expense-txt"></span>
-          </div>
-        </div>
-        <p style="font-size:14px;font-weight:600;margin:0 0 8px;">התפלגות הוצאות לפי קטגוריה</p>
-        <div style="position:relative;width:100%;height:200px;margin-bottom:10px;">
-          <canvas id="pub-chart" role="img" aria-label="התפלגות הוצאות לפי קטגוריה"></canvas>
-        </div>
-        <div id="pub-legend" style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--text-secondary);"></div>
-      </div>
-      <button class="btn ghost" id="btn-back-entry">חזרה למסך כניסה</button>
     </section>
 
     <!-- ========== דשבורד ועד ========== -->
@@ -356,7 +323,6 @@ const fbApp = initializeApp(firebaseConfig);
 const auth = getAuth(fbApp);
 const db = getFirestore(fbApp);
 try { setPersistence(auth, inMemoryPersistence).catch(() => {}); } catch (e) { console.warn("setPersistence failed", e); }
-let userExplicitlyChosePublic = false;
 
 const HEB_MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
 const todayISO = () => new Date().toISOString().slice(0,10);
@@ -573,22 +539,11 @@ $("btn-logout").addEventListener("click", async () => {
 $("btn-resident-logout").addEventListener("click", () => $("btn-logout").click());
 $("btn-resident-back").addEventListener("click", () => $("btn-logout").click());
 $("btn-ud-back").addEventListener("click", () => showView("view-units"));
-$("btn-show-public").addEventListener("click", () => {
-  userExplicitlyChosePublic = true;
-  $("view-entry").classList.add("hidden");
-  renderPublicView();
-  $("view-public").classList.remove("hidden");
-});
-$("btn-back-entry").addEventListener("click", () => {
-  userExplicitlyChosePublic = false;
-  $("view-public").classList.add("hidden");
-  $("view-entry").classList.remove("hidden");
-});
 
 onAuthStateChanged(auth, async (user) => {
   await loadSettings();
   await loadUnits();
-  if (user && !userExplicitlyChosePublic) {
+  if (user) {
     STATE.role = "admin";
     await enterApp();
   } else if (STATE.role !== "resident") {
@@ -602,7 +557,6 @@ async function enterApp() {
   await loadTransactions(STATE.currentYear);
   await computeAllTimeBalance();
   $("view-entry").classList.add("hidden");
-  $("view-public").classList.add("hidden");
   if (STATE.role === "admin") {
     populateYearSelector();
     $("admin-tabbar").classList.remove("hidden");
@@ -1818,7 +1772,7 @@ async function editUnit(unitId) {
   renderSettings();
 }
 
-// ---------- Public view ----------
+// ---------- Shared chart helper ----------
 const chartInstances = {};
 function renderExpenseChart(canvasId, legendId, expenseTxs) {
   const byCat = {};
@@ -1836,34 +1790,6 @@ function renderExpenseChart(canvasId, legendId, expenseTxs) {
   $(legendId).innerHTML = labels.length ? labels.map((l,i) => `
     <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:2px;background:${colors[i%colors.length]};"></span>${l} ${fmtILS(data[i])}</span>`).join("")
     : `<p class="center-note">אין הוצאות בשנה זו</p>`;
-}
-
-async function renderPublicView() {
-  await loadSettings();
-  await loadUnits();
-  const year = new Date().getFullYear();
-  const q = query(collection(db, "transactions"), where("year", "==", year));
-  const snap = await getDocs(q);
-  const txs = snap.docs.map(d => d.data());
-  const income = txs.filter(t=>t.type==="income" && !t.projectId).reduce((s,t)=>s+t.amount,0);
-  const expense = txs.filter(t=>t.type==="expense" && !t.projectId).reduce((s,t)=>s+t.amount,0);
-  const allTimeSnap = await getDocs(collection(db, "transactions"));
-  let allIncome = 0, allExpense = 0;
-  allTimeSnap.docs.forEach(d => {
-    const t = d.data();
-    if (t.projectId) return;
-    if (t.type === "income") allIncome += (t.amount||0); else allExpense += (t.amount||0);
-  });
-  $("pub-bname").textContent = STATE.settings.name;
-  $("pub-baddr").textContent = STATE.settings.address;
-  $("pub-balance").textContent = fmtILS(allIncome - allExpense);
-  $("pub-year").textContent = String(year);
-  const total = income+expense || 1;
-  $("pub-bar-income").style.width = (income/total*100)+"%";
-  $("pub-bar-expense").style.width = (expense/total*100)+"%";
-  $("pub-income-txt").textContent = "הכנסות " + fmtILS(income);
-  $("pub-expense-txt").textContent = "הוצאות " + fmtILS(expense);
-  renderExpenseChart("pub-chart", "pub-legend", txs.filter(t => t.type === "expense" && !t.projectId));
 }
 
 // ---------- Resident view ----------
