@@ -1511,18 +1511,32 @@ async function renderProjects() {
         <p style="font-weight:700;font-size:16px;margin:0;">${p.title}</p>
         <span class="badge warning" data-status="${p.id}" style="cursor:pointer;">${p.status||"בבחינה"}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+      <div style="margin-bottom:10px;">
         ${(p.quotes||[]).map((q,i) => `
-          <div style="background:var(--surface-2);border-radius:8px;padding:10px;position:relative;">
-            <p style="font-size:14px;font-weight:700;margin:0 0 6px;">${q.name}</p>
-            ${(q.items||[]).length ? `
-              <div style="margin-bottom:6px;">
-                ${q.items.map(it => `<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-secondary);padding:2px 0;"><span>${it.desc}</span><span>${fmtILS(it.price)}</span></div>`).join("")}
-              </div>` : ""}
-            <p style="font-size:16px;font-weight:700;margin:0 0 6px;border-top:${(q.items||[]).length ? "1px solid var(--border-strong);padding-top:4px;" : "none;"}">${fmtILS(q.total)}</p>
-            <div style="display:flex;gap:10px;">
-              <button data-edit-quote="${p.id}|${i}" style="width:auto;padding:2px 8px;font-size:12px;color:var(--blue);border:none;background:none;">ערוך</button>
-              <button data-del-quote="${p.id}|${i}" style="width:auto;padding:2px 8px;font-size:12px;color:var(--red);border:none;background:none;">מחק</button>
+          <div class="card" style="padding:12px;margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+              <p style="font-size:15px;font-weight:700;margin:0;">${q.name}</p>
+              <div style="display:flex;gap:10px;">
+                <button data-rename-quote="${p.id}|${i}" style="border:none;background:none;color:var(--blue);font-size:13px;">שנה שם</button>
+                <button data-del-quote="${p.id}|${i}" style="border:none;background:none;color:var(--red);font-size:13px;">מחק הצעה</button>
+              </div>
+            </div>
+            ${(q.items||[]).length ? (q.items||[]).map((it,ii) => `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);">
+                <span style="font-size:13px;">${it.desc}</span>
+                <div style="display:flex;align-items:center;gap:10px;">
+                  <span style="font-size:13px;font-weight:600;">${fmtILS(it.price)}</span>
+                  <button data-edit-item="${p.id}|${i}|${ii}" style="border:none;background:none;color:var(--blue);font-size:15px;padding:0 2px;">✎</button>
+                  <button data-del-item="${p.id}|${i}|${ii}" style="border:none;background:none;color:var(--red);font-size:17px;padding:0 2px;">×</button>
+                </div>
+              </div>`).join("") : `
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;">
+                <span style="font-size:13px;color:var(--text-muted);">אין פריטים - סה"כ ידני</span>
+                <button data-edit-total="${p.id}|${i}" style="width:auto;padding:3px 8px;font-size:12px;">ערוך סה"כ</button>
+              </div>`}
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid var(--border-strong);">
+              <span style="font-size:16px;font-weight:700;">${fmtILS(q.total)}</span>
+              <button data-add-item="${p.id}|${i}" style="width:auto;padding:5px 12px;font-size:13px;">+ פריט</button>
             </div>
           </div>`).join("")}
       </div>
@@ -1563,10 +1577,30 @@ async function renderProjects() {
 
   $("projects-list").querySelectorAll("[data-add-quote]").forEach(btn =>
     btn.addEventListener("click", () => addQuoteToProject(btn.dataset.addQuote, list)));
-  $("projects-list").querySelectorAll("[data-edit-quote]").forEach(btn =>
+  $("projects-list").querySelectorAll("[data-rename-quote]").forEach(btn =>
     btn.addEventListener("click", () => {
-      const [projectId, idx] = btn.dataset.editQuote.split("|");
-      editQuoteInProject(projectId, parseInt(idx), list);
+      const [projectId, idx] = btn.dataset.renameQuote.split("|");
+      renameQuote(projectId, parseInt(idx), list);
+    }));
+  $("projects-list").querySelectorAll("[data-add-item]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const [projectId, idx] = btn.dataset.addItem.split("|");
+      addItemToQuote(projectId, parseInt(idx), list);
+    }));
+  $("projects-list").querySelectorAll("[data-edit-item]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const [projectId, qIdx, iIdx] = btn.dataset.editItem.split("|");
+      editItemInQuote(projectId, parseInt(qIdx), parseInt(iIdx), list);
+    }));
+  $("projects-list").querySelectorAll("[data-del-item]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const [projectId, qIdx, iIdx] = btn.dataset.delItem.split("|");
+      deleteItemFromQuote(projectId, parseInt(qIdx), parseInt(iIdx), list);
+    }));
+  $("projects-list").querySelectorAll("[data-edit-total]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      const [projectId, idx] = btn.dataset.editTotal.split("|");
+      editQuoteManualTotal(projectId, parseInt(idx), list);
     }));
   $("projects-list").querySelectorAll("[data-del-quote]").forEach(btn =>
     btn.addEventListener("click", () => {
@@ -1649,47 +1683,70 @@ async function recordProjectPayment(projectId, unitId, list) {
 async function addQuoteToProject(projectId, list) {
   const name = prompt('שם ההצעה (למשל "הצעה 1" או שם הקבלן):');
   if (!name) return;
-  const itemsRaw = prompt('פריטים בפורמט "תיאור=מחיר", מופרדים בפסיק (למשל: צבע=12000, דלת=2500). אפשר להשאיר ריק ולהזין רק סה"כ.');
-  const items = [];
-  let total = 0;
-  if (itemsRaw) {
-    itemsRaw.split(",").forEach(part => {
-      const [desc, price] = part.split("=").map(s => s.trim());
-      const p = parseFloat(price);
-      if (desc && !isNaN(p)) { items.push({ desc, price: p }); total += p; }
-    });
-  }
-  if (!items.length) {
-    const totalStr = prompt('סה"כ להצעה (₪):', "0");
-    total = parseFloat(totalStr) || 0;
-  }
   const project = list.find(p => p.id === projectId);
-  const quotes = [...(project.quotes || []), { name, items, total }];
+  const quotes = [...(project.quotes || []), { name, items: [], total: 0 }];
   await updateDoc(doc(db, "projects", projectId), { quotes });
   renderProjects();
 }
-async function editQuoteInProject(projectId, idx, list) {
+async function renameQuote(projectId, idx, list) {
   const project = list.find(p => p.id === projectId);
   const quote = project.quotes[idx];
   const name = prompt("שם ההצעה:", quote.name);
-  if (name === null) return;
-  const currentItemsStr = (quote.items||[]).map(it => `${it.desc}=${it.price}`).join(", ");
-  const itemsRaw = prompt('פריטים בפורמט "תיאור=מחיר", מופרדים בפסיק:', currentItemsStr);
-  const items = [];
-  let total = 0;
-  if (itemsRaw) {
-    itemsRaw.split(",").forEach(part => {
-      const [desc, price] = part.split("=").map(s => s.trim());
-      const p = parseFloat(price);
-      if (desc && !isNaN(p)) { items.push({ desc, price: p }); total += p; }
-    });
-  }
-  if (!items.length) {
-    const totalStr = prompt('סה"כ להצעה (₪):', String(quote.total||0));
-    total = parseFloat(totalStr) || 0;
-  }
+  if (name === null || !name.trim()) return;
   const quotes = [...project.quotes];
-  quotes[idx] = { name, items, total };
+  quotes[idx] = { ...quote, name: name.trim() };
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
+}
+async function addItemToQuote(projectId, qIdx, list) {
+  const desc = prompt("תיאור הפריט (למשל: צבע חדר מדרגות):");
+  if (!desc) return;
+  const priceStr = prompt("מחיר (₪):", "0");
+  if (priceStr === null) return;
+  const price = parseFloat(priceStr);
+  if (isNaN(price)) { alert("מחיר לא תקין"); return; }
+  const project = list.find(p => p.id === projectId);
+  const quotes = [...project.quotes];
+  const items = [...(quotes[qIdx].items||[]), { desc: desc.trim(), price }];
+  const total = items.reduce((s,it) => s+it.price, 0);
+  quotes[qIdx] = { ...quotes[qIdx], items, total };
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
+}
+async function editItemInQuote(projectId, qIdx, iIdx, list) {
+  const project = list.find(p => p.id === projectId);
+  const item = project.quotes[qIdx].items[iIdx];
+  const desc = prompt("תיאור הפריט:", item.desc);
+  if (desc === null || !desc.trim()) return;
+  const priceStr = prompt("מחיר (₪):", String(item.price));
+  if (priceStr === null) return;
+  const price = parseFloat(priceStr);
+  if (isNaN(price)) { alert("מחיר לא תקין"); return; }
+  const quotes = [...project.quotes];
+  const items = [...quotes[qIdx].items];
+  items[iIdx] = { desc: desc.trim(), price };
+  const total = items.reduce((s,it) => s+it.price, 0);
+  quotes[qIdx] = { ...quotes[qIdx], items, total };
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
+}
+async function deleteItemFromQuote(projectId, qIdx, iIdx, list) {
+  if (!confirm("למחוק את הפריט הזה מההצעה?")) return;
+  const project = list.find(p => p.id === projectId);
+  const quotes = [...project.quotes];
+  const items = quotes[qIdx].items.filter((_,i) => i !== iIdx);
+  const total = items.reduce((s,it) => s+it.price, 0);
+  quotes[qIdx] = { ...quotes[qIdx], items, total };
+  await updateDoc(doc(db, "projects", projectId), { quotes });
+  renderProjects();
+}
+async function editQuoteManualTotal(projectId, qIdx, list) {
+  const project = list.find(p => p.id === projectId);
+  const totalStr = prompt('סה"כ להצעה (₪):', String(project.quotes[qIdx].total||0));
+  if (totalStr === null) return;
+  const total = parseFloat(totalStr) || 0;
+  const quotes = [...project.quotes];
+  quotes[qIdx] = { ...quotes[qIdx], total };
   await updateDoc(doc(db, "projects", projectId), { quotes });
   renderProjects();
 }
