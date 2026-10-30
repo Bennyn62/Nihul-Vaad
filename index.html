@@ -438,11 +438,74 @@ async function computeAllTimeBalance() {
     const cultureDebt = cultureExpected - culturePaid;
 
     STATE.unitDebts[u.id] = {
-      paid, expected, adjustment, debt: expected - paid + adjustment,
+      startYear, paid, expected, adjustment, debt: expected - paid + adjustment,
       cultureExpected, culturePaid, cultureDebt
     };
   });
   return STATE.allTimeBalance;
+}
+// ---------- Month-by-month allocation of monthly dues ----------
+// Each dues payment is spread over months: months the payment explicitly named are
+// filled first, then the rest fills the oldest unpaid month onward (FIFO).
+const monthKeyLabel = k => `${HEB_MONTHS[k % 12]} ${Math.floor(k / 12)}`;
+function isDuesPayment(t) {
+  return t.type === "income" && !t.projectId && t.category !== "תרבות הדיור";
+}
+function allocateUnitMonths(unitId) {
+  const fee = STATE.settings.fee || 80;
+  const unit = STATE.units.find(u => u.id === unitId) || {};
+  const cum = getUnitCumulative(unitId);
+  const startKey = (cum.startYear || unit.createdYear || 2023) * 12;
+  const now = new Date();
+  const nowKey = now.getFullYear() * 12 + now.getMonth();
+  const paidByMonth = {};
+  const byTx = {};
+  const paidAt = k => paidByMonth[k] || 0;
+  const add = (id, k, amt) => {
+    amt = Math.round(amt * 100) / 100;
+    if (amt <= 0) return;
+    paidByMonth[k] = paidAt(k) + amt;
+    (byTx[id] = byTx[id] || []).push({ key: k, label: monthKeyLabel(k), amount: amt, partial: amt < fee - 0.001 });
+  };
+  const payments = STATE.allTransactionsCache
+    .filter(t => t.unitId === unitId && isDuesPayment(t))
+    .sort((a, b) => a.date.localeCompare(b.date) || (a.createdAt || 0) - (b.createdAt || 0));
+  const left = {};
+  // pass 1: months chosen explicitly on the payment
+  payments.forEach(t => {
+    let rem = t.amount || 0;
+    const y = t.year || parseInt(t.date.slice(0, 4));
+    [...(t.months || [])].sort((a, b) => a - b).forEach(m => {
+      const k = y * 12 + m;
+      const take = Math.min(fee - paidAt(k), rem);
+      if (take > 0) { add(t.id, k, take); rem -= take; }
+    });
+    left[t.id] = rem;
+  });
+  // pass 2: everything else fills the oldest open month
+  const queue = [];
+  if ((unit.manualDebtAdjustment || 0) < 0) queue.push({ id: "__adj", amt: -unit.manualDebtAdjustment });
+  payments.forEach(t => queue.push({ id: t.id, amt: left[t.id] }));
+  let cursor = startKey;
+  queue.forEach(q => {
+    let rem = q.amt;
+    let guard = 0;
+    while (rem > 0.001 && guard++ < 1200) {
+      while (paidAt(cursor) >= fee - 0.001) cursor++;
+      const take = Math.min(fee - paidAt(cursor), rem);
+      add(q.id, cursor, take);
+      rem -= take;
+    }
+  });
+  Object.values(byTx).forEach(rows => rows.sort((a, b) => a.key - b.key));
+  const openMonths = [];
+  for (let k = startKey; k <= nowKey; k++) {
+    const paid = paidAt(k);
+    if (paid < fee - 0.001) openMonths.push({ key: k, label: monthKeyLabel(k), paid, owed: Math.round((fee - paid) * 100) / 100 });
+  }
+  const prepaid = Object.keys(paidByMonth).map(Number).filter(k => k > nowKey).sort((a, b) => a - b)
+    .map(k => ({ key: k, label: monthKeyLabel(k), paid: paidByMonth[k] }));
+  return { fee, byTx, openMonths, prepaid };
 }
 async function saveTransaction(tx) {
   const ref = await addDoc(collection(db, "transactions"), tx);
@@ -639,19 +702,31 @@ async function openUnitDetail(unitId) {
   showViewRaw("view-unit-detail");
   renderUnitCumulativeCard(unitId);
 
-  const txs = STATE.transactions.filter(t => t.unitId === unitId).sort((a,b)=>b.date.localeCompare(a.date));
-  $("ud-transactions").innerHTML = txs.length ? txs.map(t => `
+  const alloc = allocateUnitMonths(unitId);
+  const txs = STATE.allTransactionsCache
+    .filter(t => t.unitId === unitId && (t.year || parseInt(t.date.slice(0,4))) === STATE.currentYear)
+    .sort((a,b) => b.date.localeCompare(a.date));
+  $("ud-transactions").innerHTML = txs.length ? txs.map(t => {
+    const rows = isDuesPayment(t) ? (alloc.byTx[t.id] || []) : [];
+    const rowsHtml = rows.length ? rows.map(r => `
+      <div style="display:flex;justify-content:space-between;font-size:14px;padding:5px 0;border-top:1px solid var(--border);">
+        <span>דמי ועד - ${r.label}${r.partial ? ` <span class="badge warning" style="font-size:11px;padding:1px 8px;">חלקי</span>` : ""}</span>
+        <span style="font-weight:600;">${fmtILS(r.amount)}</span>
+      </div>`).join("") : "";
+    return `
     <div class="card" style="padding:10px 14px;margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;">
-        <span style="font-size:15px;">${t.category||"דמי ועד"}</span>
+        <span style="font-size:15px;font-weight:600;">${rows.length ? "תשלום דמי ועד" : (t.category || "דמי ועד")}</span>
         <span style="font-size:15px;font-weight:700;">${fmtILS(t.amount)}</span>
       </div>
-      <p style="font-size:13px;color:var(--text-muted);margin:2px 0 0;">${t.date}</p>
+      <p style="font-size:13px;color:var(--text-muted);margin:2px 0 6px;">${t.date.split("-").reverse().join(".")}${t.method ? " - " + t.method : ""}</p>
+      ${rowsHtml}
       <div style="display:flex;gap:8px;margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">
         <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;" data-edit-ud="${t.id}"><i class="ti ti-pencil"></i> ערוך</button>
         <button class="btn ghost" style="width:auto;padding:4px 10px;font-size:13px;color:var(--red);" data-del-ud="${t.id}"><i class="ti ti-trash"></i> מחק</button>
       </div>
-    </div>`).join("") : `<p class="center-note">אין תנועות עדיין בשנה הנוכחית שנבחרה</p>`;
+    </div>`;
+  }).join("") : `<p class="center-note">אין תנועות בשנה ${STATE.currentYear}</p>`;
 
   $("ud-transactions").querySelectorAll("[data-edit-ud]").forEach(btn =>
     btn.addEventListener("click", async () => {
@@ -667,7 +742,24 @@ async function openUnitDetail(unitId) {
 function renderUnitCumulativeCard(unitId) {
   const unit = STATE.units.find(u => u.id === unitId);
   const cum = getUnitCumulative(unitId);
+  const alloc = allocateUnitMonths(unitId);
+  const openTotal = alloc.openMonths.reduce((s,m) => s + m.owed, 0);
+  const openHtml = alloc.openMonths.length ? alloc.openMonths.map(m => `
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;padding:6px 0;border-top:1px solid var(--border);">
+        <span>${m.label}${m.paid > 0 ? ` <span style="color:var(--text-muted);font-size:12px;">(שולם ${fmtILS(m.paid)} מתוך ${fmtILS(alloc.fee)})</span>` : ""}</span>
+        <span class="badge ${m.paid > 0 ? "warning" : "danger"}">${m.paid > 0 ? "חלקי - " : ""}נותר ${fmtILS(m.owed)}</span>
+      </div>`).join("")
+    : `<p style="color:var(--green);font-size:14px;margin:0;"><i class="ti ti-check"></i> כל החודשים שולמו</p>`;
+  const prepaidHtml = alloc.prepaid.length ? `
+      <p style="font-size:13px;color:var(--blue);margin:10px 0 0;">שולם מראש: ${alloc.prepaid.map(m => `${m.label} (${fmtILS(m.paid)})`).join(", ")}</p>` : "";
   $("ud-cumulative").innerHTML = `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+        <p style="font-weight:700;font-size:15px;margin:0;">חודשים פתוחים לתשלום</p>
+        ${alloc.openMonths.length ? `<span style="font-weight:700;color:var(--red);">${fmtILS(openTotal)}</span>` : ""}
+      </div>
+      ${openHtml}${prepaidHtml}
+    </div>
     <div class="card">
       <p style="font-weight:700;font-size:15px;margin:0 0 8px;">יתרת חוב מצטברת (הערכה, כל השנים)</p>
       <table style="width:100%;font-size:14px;border-collapse:collapse;">
@@ -699,7 +791,7 @@ function renderUnitCumulativeCard(unitId) {
     await updateUnit(unitId, { manualDebtAdjustment: num });
     STATE.unitDebts[unitId].adjustment = num;
     STATE.unitDebts[unitId].debt = STATE.unitDebts[unitId].expected - STATE.unitDebts[unitId].paid + num;
-    renderUnitCumulativeCard(unitId);
+    openUnitDetail(unitId);
     renderUnitsGrid("dashboard-units");
   });
 }
@@ -830,24 +922,8 @@ function openReceipt(tx) {
   $("rc-unit").textContent = unit ? unit.number : "";
   $("rc-name").textContent = unit ? unit.currentName : "";
   $("rc-method").textContent = tx.method;
-  let lines;
-  if (tx.category === "דמי ועד" && STATE.settings.fee) {
-    const fee = STATE.settings.fee;
-    const fullMonths = Math.floor(tx.amount / fee);
-    const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
-    const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
-    const items = [];
-    for (let i = 0; i < fullMonths; i++) {
-      items.push(`<div class="line-item"><span>${tx.category} - ${HEB_MONTHS[(startMonth+i)%12]} ${STATE.currentYear}</span><span>${fmtILS(fee)}</span></div>`);
-    }
-    if (remainder > 0) {
-      const label = fullMonths > 0 ? `מקדמה לחודש ${HEB_MONTHS[(startMonth+fullMonths)%12]}` : "תשלום חלקי על חשבון החודש";
-      items.push(`<div class="line-item"><span style="color:var(--blue);">${label}</span><span>${fmtILS(remainder)}</span></div>`);
-    }
-    lines = items.length ? items.join("") : `<div class="line-item"><span>${tx.category}</span><span>${fmtILS(tx.amount)}</span></div>`;
-  } else {
-    lines = `<div class="line-item"><span>${tx.category}</span><span>${fmtILS(tx.amount)}</span></div>`;
-  }
+  const lines = buildReceiptItemLines(tx).map(l =>
+    `<div class="line-item"><span>${l.text}</span><span>${fmtILS(l.amount)}</span></div>`).join("");
   $("rc-lines").innerHTML = lines;
   $("rc-total").textContent = fmtILS(tx.amount);
   $("rc-sent-badge").classList.add("hidden");
@@ -866,7 +942,7 @@ $("btn-print-receipt").addEventListener("click", () => {
   const unit = STATE.units.find(u => u.id === tx.unitId);
   const sigHtml = STATE.settings.signatureDataUrl ? `<img src="${STATE.settings.signatureDataUrl}">` : "";
   const receiptNum = $("rc-num").textContent;
-  const itemsHtml = buildReceiptItemLines(tx).map(l => `<p class="pr-receipt-item">- ${l}</p>`).join("");
+  const itemsHtml = buildReceiptItemLines(tx).map(l => `<p class="pr-receipt-item">- ${l.text}: ${fmtILS(l.amount)}</p>`).join("");
 
   $("print-report").innerHTML = `
     <div class="pr-receipt-text">
@@ -888,17 +964,12 @@ $("btn-print-receipt").addEventListener("click", () => {
   triggerPrint(`קבלה-${receiptNum}`);
 });
 function buildReceiptItemLines(tx) {
-  if (tx.category === "דמי ועד" && STATE.settings.fee) {
-    const fee = STATE.settings.fee;
-    const fullMonths = Math.floor(tx.amount / fee);
-    const remainder = Math.round((tx.amount - fullMonths*fee) * 100) / 100;
-    const startMonth = (tx.months && tx.months.length) ? tx.months[0] : new Date(tx.date).getMonth();
-    const lines = [];
-    for (let i = 0; i < fullMonths; i++) lines.push(`דמי ועד ${HEB_MONTHS[(startMonth+i)%12]}: ${fmtILS(fee)}`);
-    if (remainder > 0) lines.push(`מקדמה לחודש הבא: ${fmtILS(remainder)}`);
-    return lines.length ? lines : [`${tx.category}: ${fmtILS(tx.amount)}`];
+  // returns [{text, amount}] - one line per month this payment actually covered
+  if (tx.id && tx.unitId && isDuesPayment(tx)) {
+    const rows = allocateUnitMonths(tx.unitId).byTx[tx.id] || [];
+    if (rows.length) return rows.map(r => ({ text: `דמי ועד ${r.label}${r.partial ? " (חלקי)" : ""}`, amount: r.amount }));
   }
-  return [`${tx.category}: ${fmtILS(tx.amount)}`];
+  return [{ text: tx.category || "תשלום", amount: tx.amount }];
 }
 
 function buildReceiptImage(tx, unit, receiptNum, itemLines) {
@@ -943,7 +1014,7 @@ function buildReceiptImage(tx, unit, receiptNum, itemLines) {
 
   ctx.font = "16px Arial, sans-serif";
   ctx.fillStyle = "#222222";
-  itemLines.forEach(line => { ctx.fillText("- " + line, W-marginX, y); y += rowH.item; });
+  itemLines.forEach(line => { ctx.fillText(`- ${line.text}: ${fmtILS(line.amount)}`, W-marginX, y); y += rowH.item; });
   y += 10;
 
   ctx.strokeStyle = "#333333";
@@ -1009,7 +1080,7 @@ $("btn-share-whatsapp").addEventListener("click", async () => {
         }
       }
       // Fallback for browsers without file-sharing support: open WhatsApp with formatted text
-      const msg = `*${STATE.settings.name}*\n${STATE.settings.address || ""}\n_קבלה מס' ${receiptNum}_\n\n*דירה:* ${unit.number}\n*שם הדייר:* ${unit.currentName}\n*תאריך:* ${tx.date.split("-").reverse().join(".")}\n*אופן תשלום:* ${tx.method}\n\n${itemLines.map(l=>"- "+l).join("\n")}\n\n*סה"כ שולם: ${fmtILS(tx.amount)}*\n\nתודה על התשלום! 🙏\nבברכה, ועד הבית`;
+      const msg = `*${STATE.settings.name}*\n${STATE.settings.address || ""}\n_קבלה מס' ${receiptNum}_\n\n*דירה:* ${unit.number}\n*שם הדייר:* ${unit.currentName}\n*תאריך:* ${tx.date.split("-").reverse().join(".")}\n*אופן תשלום:* ${tx.method}\n\n${itemLines.map(l=>`- ${l.text}: ${fmtILS(l.amount)}`).join("\n")}\n\n*סה"כ שולם: ${fmtILS(tx.amount)}*\n\nתודה על התשלום! 🙏\nבברכה, ועד הבית`;
       const waNumber = phone.startsWith("0") ? "972"+phone.slice(1) : phone;
       window.open(`https://wa.me/${waNumber}?text=${encodeURIComponent(msg)}`, "_blank");
       await markShared();
