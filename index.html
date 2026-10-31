@@ -587,6 +587,7 @@ function monthOwner(periods, k) {
   if (earliest.start && first < earliest.start) return earliest;
   return { name: NO_TENANT, current: false };
 }
+var allocNote = (r) => r.partial ? " (חלקי)" : r.completion ? " (השלמה)" : "";
 function unitStartYear(unit, unitTxs) {
   let y = Number(unit.createdYear) || 2023;
   for (const t of unitTxs) if (isDuesPayment(t) || isCulturePayment(t)) y = Math.min(y, txYear(t));
@@ -604,8 +605,10 @@ function computeUnit(unit, allTxs, settings, now = /* @__PURE__ */ new Date()) {
   const add = (id, k, amt) => {
     amt = round2(amt);
     if (amt <= 0) return;
-    paidByMonth[k] = round2(paidAt(k) + amt);
-    (byTx[id] = byTx[id] || []).push({ key: k, label: keyLabel(k), amount: amt, fee: fee(k), partial: amt < fee(k) - 1e-3 });
+    const before = paidAt(k);
+    paidByMonth[k] = round2(before + amt);
+    const complete = paidByMonth[k] >= fee(k) - 1e-3;
+    (byTx[id] = byTx[id] || []).push({ key: k, label: keyLabel(k), amount: amt, fee: fee(k), partial: !complete, completion: complete && before > 0 });
   };
   const dues = unitTxs.filter(isDuesPayment).sort((a, b) => String(a.date).localeCompare(String(b.date)) || (a.createdAt || 0) - (b.createdAt || 0));
   const left = {};
@@ -692,7 +695,7 @@ function computeUnit(unit, allTxs, settings, now = /* @__PURE__ */ new Date()) {
 }
 function receiptLines(tx, unitCalc2) {
   if (isDuesPayment(tx) && unitCalc2 && unitCalc2.byTx[tx.id] && unitCalc2.byTx[tx.id].length) {
-    return unitCalc2.byTx[tx.id].map((r) => ({ text: `${DUES_CATEGORY} ${r.label}${r.partial ? " (חלקי)" : ""}`, amount: r.amount }));
+    return unitCalc2.byTx[tx.id].map((r) => ({ text: `${DUES_CATEGORY} ${r.label}${allocNote(r)}`, amount: r.amount }));
   }
   if (isCulturePayment(tx)) return [{ text: `${CULTURE_CATEGORY} ${txYear(tx)}`, amount: Number(tx.amount) || 0 }];
   return [{ text: tx.category || "תשלום", amount: Number(tx.amount) || 0 }];
@@ -2290,7 +2293,7 @@ function renderIncome(main, params, go2) {
       const c = computeUnit(unit, [...S.txs, fake], S.settings);
       const rows = c.byTx.__new || [];
       const remaining = c.currentDebt;
-      pv.innerHTML = `<p class="pv-title">התשלום יכסה:</p>${rows.map((r) => `<div class="tx-row"><span>${esc(r.label)}${r.partial ? " (חלקי)" : ""}</span><span>${fmtILS(r.amount)}</span></div>`).join("")}
+      pv.innerHTML = `<p class="pv-title">התשלום יכסה:</p>${rows.map((r) => `<div class="tx-row"><span>${esc(r.label)}${allocNote(r)}</span><span>${fmtILS(r.amount)}</span></div>`).join("")}
         <p class="pv-foot">${remaining > 0 ? `אחרי התשלום יישאר חוב: ${fmtILS(remaining)}` : c.credit > 0 ? `יתרת זכות אחרי התשלום: ${fmtILS(c.credit)}` : "אחרי התשלום אין חוב"}</p>`;
       pv.hidden = false;
     } else pv.hidden = true;
